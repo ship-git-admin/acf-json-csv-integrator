@@ -183,11 +183,21 @@ class RSCSV_Import_Post_Helper
                     if (strpos($key, 'field_') === 0) {
                         $fobj = get_field_object($key);
                         if (is_array($fobj) && isset($fobj['key']) && $fobj['key'] == $key) {
+                            // 単一の画像/ファイルフィールドかつ値がURLの場合、ダウンロードしてメディア登録しIDに置換
+                            if (is_string($value) && filter_var($value, FILTER_VALIDATE_URL)) {
+                                if (isset($fobj['type']) && ($fobj['type'] === 'image' || $fobj['type'] === 'file')) {
+                                    $attachment_id = $this->addMediaFile($value);
+                                    if ($attachment_id) {
+                                        $value = $attachment_id;
+                                    }
+                                }
+                            }
                             $this->acfUpdateField($key, $value);
                             $is_acf = 1;
                         }
                     } elseif ($is_json_array) {
-                        // メインキー名が通常のフィールド名であっても、値がJSON配列の場合は update_field を使用
+                        // 配列内の画像URLを自動でダウンロードしてメディア登録しIDに置換
+                        $decoded_value = $this->processAcfArrayImages($decoded_value);
                         $this->acfUpdateField($key, $decoded_value);
                         $is_acf = 1;
                     }
@@ -200,6 +210,61 @@ class RSCSV_Import_Post_Helper
         $this->scfSave($scf_array);
     }
     
+    /**
+     * ACF配列内の画像URLを自動的にダウンロード・メディア登録し、アタッチメントIDに置換する（再帰処理）
+     *
+     * @param array $array ACFの多次元配列
+     * @return array 変換後の多次元配列
+     */
+    protected function processAcfArrayImages($array)
+    {
+        if (!is_array($array)) {
+            return $array;
+        }
+
+        foreach ($array as $key => $value) {
+            if (is_array($value)) {
+                $array[$key] = $this->processAcfArrayImages($value);
+            } elseif (is_string($value) && !empty($value)) {
+                $is_image_field = false;
+
+                // 1. ACFのフィールド定義から画像/ファイルフィールドか判定
+                if (function_exists('acf_get_field')) {
+                    $field_info = acf_get_field($key);
+                    if (is_array($field_info) && isset($field_info['type'])) {
+                        if ($field_info['type'] === 'image' || $field_info['type'] === 'file') {
+                            $is_image_field = true;
+                        }
+                    }
+                }
+
+                // 2. フォールバック: 値が画像の拡張子を持つURLの場合
+                if (!$is_image_field) {
+                    $is_url = filter_var($value, FILTER_VALIDATE_URL);
+                    if ($is_url) {
+                        $path_info = pathinfo(parse_url($value, PHP_URL_PATH));
+                        if (isset($path_info['extension'])) {
+                            $ext = strtolower($path_info['extension']);
+                            if (in_array($ext, array('jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'zip'))) {
+                                $is_image_field = true;
+                            }
+                        }
+                    }
+                }
+
+                // 画像/ファイルフィールドとして扱う場合、URLをダウンロードしてメディア登録
+                if ($is_image_field && filter_var($value, FILTER_VALIDATE_URL)) {
+                    $attachment_id = $this->addMediaFile($value);
+                    if ($attachment_id) {
+                        $array[$key] = $attachment_id;
+                    }
+                }
+            }
+        }
+
+        return $array;
+    }
+
     /**
      * A wrapper of update_post_meta
      *

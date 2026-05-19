@@ -250,6 +250,36 @@ if (
             if (function_exists('get_field')) {
               $acf_value = get_field($value, $result['post_id'], false); // フォーマットなしでデータを取得
               if ($acf_value !== null && $acf_value !== false) {
+                // 画像やファイルIDを自動的にURLに変換する匿名再帰関数
+                $export_convert_images = function($data, $field_key_or_name) use (&$export_convert_images) {
+                  if (is_array($data)) {
+                    foreach ($data as $k => $v) {
+                      $data[$k] = $export_convert_images($v, $k);
+                    }
+                  } else {
+                    if ($data && (is_numeric($data) || is_int($data))) {
+                      $is_image_field = false;
+                      if (function_exists('acf_get_field')) {
+                        $field_info = acf_get_field($field_key_or_name);
+                        if (is_array($field_info) && isset($field_info['type'])) {
+                          if ($field_info['type'] === 'image' || $field_info['type'] === 'file') {
+                            $is_image_field = true;
+                          }
+                        }
+                      }
+                      if ($is_image_field) {
+                        $url = wp_get_attachment_url($data);
+                        if ($url) {
+                          $data = $url;
+                        }
+                      }
+                    }
+                  }
+                  return $data;
+                };
+
+                $acf_value = $export_convert_images($acf_value, $value);
+
                 if (is_array($acf_value)) {
                   // 配列（柔軟コンテンツや繰り返しフィールドなど）は JSON文字列にエンコードして出力
                   $field_value = json_encode($acf_value, JSON_UNESCAPED_UNICODE);
