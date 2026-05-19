@@ -458,6 +458,7 @@ class RSCSV_Import_Post_Helper
      */
     public function setAttachment($file, $data = array())
     {
+        $data = is_array($data) ? $data : array();
         $post = $this->getPost();
         if ( $file && file_exists($file) ) {
             $filename       = basename($file);
