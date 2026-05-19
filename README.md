@@ -4,6 +4,9 @@ An integrated tool to export and import ACF (Advanced Custom Fields) flexible co
 
 ## Changelog
 
+### 1.0.2 (2026-05-19)
+- 自動アップデート認証用のトークンを制限付きトークン（Fine-grained PAT）へ移行
+
 ### 1.0.1 (2026-05-19)
 - 不具合の修正 (Bug fixes and stability improvements)
 
