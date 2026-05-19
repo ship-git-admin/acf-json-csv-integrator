@@ -251,15 +251,26 @@ if (
               $acf_value = get_field($value, $result['post_id'], false); // フォーマットなしでデータを取得
               if ($acf_value !== null && $acf_value !== false) {
                 // 画像やファイルIDを自動的にURLに変換する匿名再帰関数
-                $export_convert_images = function($data, $field_key_or_name) use (&$export_convert_images) {
+                $export_convert_images = function($data, $field_key_or_name, $parent_type = '') use (&$export_convert_images) {
                   if (is_array($data)) {
+                    // 現在のフィールドタイプを取得
+                    $current_type = '';
+                    if (function_exists('acf_get_field') && !is_numeric($field_key_or_name)) {
+                      $field_info = acf_get_field($field_key_or_name);
+                      if (is_array($field_info) && isset($field_info['type'])) {
+                        $current_type = $field_info['type'];
+                      }
+                    }
+
                     foreach ($data as $k => $v) {
-                      $data[$k] = $export_convert_images($v, $k);
+                      $data[$k] = $export_convert_images($v, $k, $current_type ? $current_type : $parent_type);
                     }
                   } else {
                     if ($data && (is_numeric($data) || is_int($data))) {
                       $is_image_field = false;
-                      if (function_exists('acf_get_field')) {
+                      if ($parent_type === 'gallery' || $parent_type === 'image' || $parent_type === 'file') {
+                        $is_image_field = true;
+                      } elseif (function_exists('acf_get_field') && !is_numeric($field_key_or_name)) {
                         $field_info = acf_get_field($field_key_or_name);
                         if (is_array($field_info) && isset($field_info['type'])) {
                           if ($field_info['type'] === 'image' || $field_info['type'] === 'file') {

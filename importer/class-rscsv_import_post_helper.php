@@ -214,31 +214,55 @@ class RSCSV_Import_Post_Helper
      * ACF配列内の画像URLを自動的にダウンロード・メディア登録し、アタッチメントIDに置換する（再帰処理）
      *
      * @param array $array ACFの多次元配列
+     * @param string $parent_type 親フィールドのACFタイプ
      * @return array 変換後の多次元配列
      */
-    protected function processAcfArrayImages($array)
+    protected function processAcfArrayImages($array, $parent_type = '')
     {
         if (!is_array($array)) {
             return $array;
         }
 
+        // 1. もしこの配列自体がACFの「画像オブジェクト（連想配列）」の構造を持っている場合
+        // （例：array('ID' => 123, 'url' => 'https://...', 'sizes' => ...） の場合、
+        // そのURLをダウンロードしてローカルアタッチメントID値に丸ごと置換する。
+        if (isset($array['url']) && filter_var($array['url'], FILTER_VALIDATE_URL)) {
+            $path_info = pathinfo(parse_url($array['url'], PHP_URL_PATH));
+            if (isset($path_info['extension'])) {
+                $ext = strtolower($path_info['extension']);
+                if (in_array($ext, array('jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'zip'))) {
+                    $attachment_id = $this->addMediaFile($array['url']);
+                    if ($attachment_id) {
+                        return $attachment_id;
+                    }
+                }
+            }
+        }
+
+        // 2. 通常の再帰処理
         foreach ($array as $key => $value) {
+            // 現在のフィールドのタイプをACF設定から取得
+            $current_type = '';
+            if (function_exists('acf_get_field') && !is_numeric($key)) {
+                $field_info = acf_get_field($key);
+                if (is_array($field_info) && isset($field_info['type'])) {
+                    $current_type = $field_info['type'];
+                }
+            }
+
             if (is_array($value)) {
-                $array[$key] = $this->processAcfArrayImages($value);
+                $array[$key] = $this->processAcfArrayImages($value, $current_type ? $current_type : $parent_type);
             } elseif (is_string($value) && !empty($value)) {
                 $is_image_field = false;
 
-                // 1. ACFのフィールド定義から画像/ファイルフィールドか判定
-                if (function_exists('acf_get_field')) {
-                    $field_info = acf_get_field($key);
-                    if (is_array($field_info) && isset($field_info['type'])) {
-                        if ($field_info['type'] === 'image' || $field_info['type'] === 'file') {
-                            $is_image_field = true;
-                        }
-                    }
+                // 親がギャラリー、画像、ファイル、またはこのフィールド自体が画像・ファイルの場合
+                if ($parent_type === 'gallery' || $parent_type === 'image' || $parent_type === 'file') {
+                    $is_image_field = true;
+                } elseif ($current_type === 'image' || $current_type === 'file') {
+                    $is_image_field = true;
                 }
 
-                // 2. フォールバック: 値が画像の拡張子を持つURLの場合
+                // フォールバック: 値が画像の拡張子を持つURLの場合
                 if (!$is_image_field) {
                     $is_url = filter_var($value, FILTER_VALIDATE_URL);
                     if ($is_url) {
