@@ -151,6 +151,9 @@ class RSCSV_Import_Post_Helper
      */
     public function setMeta($data)
     {
+        if (empty($data) || !is_array($data)) {
+            return;
+        }
         $scf_array = array();
         foreach ($data as $key => $value) {
             $is_cfs = 0;

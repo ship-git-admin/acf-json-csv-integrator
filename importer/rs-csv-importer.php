@@ -441,14 +441,18 @@ class RS_CSV_Importer extends WP_Importer {
 	
 }
 
-// Initialize
+// テキストドメインを init で読み込む（WP 6.7+ の too-early 警告を回避）
+function really_simple_csv_importer_load_textdomain() {
+    load_plugin_textdomain( 'really-simple-csv-importer', false, dirname( plugin_basename(__FILE__) ) . '/languages' );
+}
+add_action( 'init', 'really_simple_csv_importer_load_textdomain' );
+
+// インポーターを admin_init で登録（init 後なので翻訳が確実に読み込まれた後に実行される）
 function really_simple_csv_importer() {
-	load_plugin_textdomain( 'really-simple-csv-importer', false, dirname( plugin_basename(__FILE__) ) . '/languages' );
-	
     $rs_csv_importer = new RS_CSV_Importer();
     register_importer('csv', __('CSV', 'really-simple-csv-importer'), __('Import posts, categories, tags, custom fields from simple csv file.', 'really-simple-csv-importer'), array ($rs_csv_importer, 'dispatch'));
 }
-add_action( 'plugins_loaded', 'really_simple_csv_importer' );
+add_action( 'admin_init', 'really_simple_csv_importer' );
 
 // 公式ディレクトリからの更新通知を完全にブロック
 add_filter('site_transient_update_plugins', function($transient) {
