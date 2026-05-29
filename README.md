@@ -4,6 +4,11 @@ An integrated tool to export and import ACF (Advanced Custom Fields) flexible co
 
 ## Changelog
 
+### 1.0.6 (2026-05-29)
+- タクソノミーターム（分類情報）のインポートおよびエクスポート機能を追加
+- 画像ダウンロード時にBasic認証を突破する機能（管理画面に入力フォームを追加）を実装
+- その他、インポート処理の改善とバグ修正
+
 ### 1.0.2 (2026-05-19)
 - 自動アップデート認証用のトークンを制限付きトークン（Fine-grained PAT）へ移行
 
