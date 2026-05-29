@@ -340,7 +340,8 @@ if (
       if (function_exists("mb_convert_variables")) {
         mb_convert_variables($string_code, 'UTF-8', $fields);
       }
-      fputcsv($fp, $fields);
+      // RFC 4180準拠: escape="" で \ によるエスケープを無効化し "→"" のみで統一
+      fputcsv($fp, $fields, ',', '"', '');
     }
     fclose($fp);
 

@@ -15,7 +15,9 @@ class RS_CSV_Helper {
 	}
 
 	public function fgetcsv($handle, $length = 0) {
-		return fgetcsv($handle, $length, self::DELIMITER);
+		// RFC 4180準拠: escape="" で \ をエスケープ文字として扱わず "→"" のみで統一
+		// これにより JSON 内の \" がフィールドを誤分割するバグを防ぐ
+		return fgetcsv($handle, $length, self::DELIMITER, '"', '');
 	}
 
 	public function fclose($fp) {

@@ -1,34 +1,45 @@
 jQuery(function($) {
-    //1つ目以外を見えなくする
-    $('.plugin_tab li:first-child').addClass('select');
-    $('.plugin_content:not(:first-child)').addClass('hide');
 
-    //クリックしたときのファンクションをまとめて指定
-    $('.plugin_tab li').click(function() {
-
-        //.index()を使いクリックされたタブが何番目かを調べ、
-        //indexという変数に代入します。
-        var index = $('.plugin_tab li').index(this);
-
-        //コンテンツを一度すべて非表示にし、
-        $('.plugin_contents .plugin_content').css('display', 'none');
-
-        //クリックされたタブと同じ順番のコンテンツを表示します。
-        $('.plugin_contents .plugin_content').eq(index).css('display', 'block');
-
-        //一度タブについているクラスselectを消し、
-        $('.plugin_tab li').removeClass('select');
-
-        //クリックされたタブのみにクラスselectをつけます。
-        $(this).addClass('select')
+    // 各タブグループを独立して初期化
+    $('.tab-group').each(function() {
+        var $group = $(this);
+        // 各グループの最初のタブだけ選択状態にする
+        $group.find('.plugin_tab li:first-child').addClass('select');
+        // 各グループの2番目以降のコンテンツを非表示にする
+        $group.find('.plugin_content:not(:first-child)').addClass('hide');
     });
 
-    //カレンダー
+    // タブクリック：同じグループ内だけを操作
+    $('.plugin_tab li').click(function() {
+        var $group = $(this).closest('.tab-group');
+        var index = $group.find('.plugin_tab li').index(this);
+
+        // グループ内のコンテンツを全て非表示
+        $group.find('.plugin_contents .plugin_content').css('display', 'none');
+        // クリックされたタブと同順のコンテンツを表示
+        $group.find('.plugin_contents .plugin_content').eq(index).css('display', 'block');
+
+        // グループ内のselectクラスをリセット
+        $group.find('.plugin_tab li').removeClass('select');
+        $(this).addClass('select');
+    });
+
+    // チェックボックス
+    $('.all_checked').click(function() {
+        var target = $(this).attr('data-target');
+        $(target).prop('checked', true);
+    });
+    $('.all_checkout').click(function() {
+        var target = $(this).attr('data-target');
+        $(target).prop('checked', false);
+    });
+
+    // カレンダー
     $('.post_date-datepicker').datepicker({
         'dateFormat': 'yy-m-d'
     });
 
-    // 設定を反映する
+    // 設定を反映する（投稿タイプのみ）
     set_settings();
 
     function set_settings() {
@@ -47,9 +58,10 @@ jQuery(function($) {
                 if ($(this).attr('data-post-type') == setting.post_type) {
                     $content = $(this);
                 }
-            })
+            });
 
-            // checkする
+            if (!$content) return;
+
             $.each(setting.values, function(key, value) {
                 if (key == 'posts_values' || key == 'post_status' || key == 'taxonomies' || key == 'cf_fields') {
                     $.each(value, function(subkey, val) {
@@ -66,7 +78,7 @@ jQuery(function($) {
         });
     }
 
-    // 設定を保存する
+    // 設定を保存する（投稿タイプのみ）
     $('.js-csv-content').each(function() {
         var $checkboxes = $(this).find('input[type="checkbox"]');
         $checkboxes.change(function() {
@@ -90,7 +102,6 @@ jQuery(function($) {
                     var checkbox_value = $(this).attr('value');
 
                     if (checkbox_name.match(/\[\]/)) {
-                        // 配列
                         var checkbox_names = checkbox_name.replace(/\[\]/g, "");
                         switch (checkbox_names) {
                             case 'posts_values':
@@ -115,17 +126,24 @@ jQuery(function($) {
             values['post_status'] = post_status;
             values['taxonomies'] = taxonomies;
             values['cf_fields'] = cf_fields;
-            var data = {
+            settings[index] = {
                 post_type: post_type,
                 values: values
-            }
-            settings[index] = data;
+            };
         });
-        // Jsonにして保存
-        var json_settings = JSON.stringify(settings);
-        $.cookie("wce-settings", json_settings);
+        $.cookie("wce-settings", JSON.stringify(settings));
     }
 
-
+    // offsetの表示（投稿タイプ）
+    $('input.limit').on({
+        'change': function() {
+            var target = $(this).attr('data-target');
+            if ($(this).val() > 0) {
+                $(target).fadeIn();
+            } else {
+                $(target).fadeOut();
+            }
+        }
+    });
 
 });
