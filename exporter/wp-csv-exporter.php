@@ -41,8 +41,26 @@ class WP_CSV_Exporter extends WCEBase
 
   public function init()
   {
-    //他言語化
+    // 他言語化
     load_plugin_textdomain($this->textdomain, false, basename(dirname(__FILE__)) . '/languages/');
+
+    // download/ ディレクトリをプラグイン起動時に毎回確認・作成する
+    // Git 経由のアップデートでディレクトリが消えても自動復元できるようにする
+    $this->ensureDownloadDirectory();
+  }
+
+  /**
+   * CSVを一時保存する download/ ディレクトリの存在と書き込み権限を保証する
+   */
+  private function ensureDownloadDirectory()
+  {
+    $dir = WCE_PLUGIN_DIR . '/download/';
+    if (!file_exists($dir)) {
+      mkdir($dir, 0770, true);
+    }
+    if (!is_writable($dir)) {
+      chmod($dir, 0770);
+    }
   }
 
   /**
