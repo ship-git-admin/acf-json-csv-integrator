@@ -279,11 +279,19 @@ class RSCSV_Import_Post_Helper
                     }
                 }
 
-                // 画像/ファイルフィールドとして扱う場合、URLをダウンロードしてメディア登録
+                // 画像/ファイルフィールドとして扱う場合、URLをダウンロードしてメディア登録しIDに置換
                 if ($is_image_field && filter_var($value, FILTER_VALIDATE_URL)) {
                     $attachment_id = $this->addMediaFile($value);
                     if ($attachment_id) {
                         $array[$key] = $attachment_id;
+                    }
+                    // addMediaFile が失敗した場合でも URL のまま残すと ACF が誤動作するため
+                    // 既存メディアを URL で最終検索してIDに変換する
+                    if (!$attachment_id) {
+                        $found_id = attachment_url_to_postid($value);
+                        if ($found_id) {
+                            $array[$key] = $found_id;
+                        }
                     }
                 }
             }
@@ -417,13 +425,39 @@ class RSCSV_Import_Post_Helper
     public function addMediaFile($file, $data = null)
     {
         if (parse_url($file, PHP_URL_SCHEME)) {
-            $file = $this->remoteGet($file);
+            $url = $file;
+
+            // ① 同じURLのメディアが既に存在する場合はそのIDを返す（重複ダウンロード防止）
+            $existing_id = attachment_url_to_postid($url);
+            if ($existing_id) {
+                return $existing_id;
+            }
+
+            // ② リモートからダウンロード
+            $file = $this->remoteGet($url);
+
+            // ③ ダウンロード失敗時: ファイル名で既存メディアを検索してフォールバック
+            if (!$file) {
+                $basename = pathinfo(parse_url($url, PHP_URL_PATH), PATHINFO_FILENAME);
+                if ($basename) {
+                    $query = new WP_Query(array(
+                        'post_type'      => 'attachment',
+                        'post_status'    => 'inherit',
+                        'posts_per_page' => 1,
+                        'title'          => sanitize_file_name($basename),
+                    ));
+                    if ($query->have_posts()) {
+                        return $query->posts[0]->ID;
+                    }
+                }
+                return false;
+            }
         }
         $id = $this->setAttachment($file, $data);
         if ($id) {
             return $id;
         }
-        
+
         return false;
     }
     
