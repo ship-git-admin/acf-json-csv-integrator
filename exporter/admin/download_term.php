@@ -51,6 +51,8 @@ if (
       foreach ($terms as $term) {
         $row = array();
 
+        $row['taxonomy'] = $taxonomy;
+
         // 標準フィールド
         if (in_array('term_id', $term_fields))    $row['term_id']     = $term->term_id;
         if (in_array('name', $term_fields))        $row['name']        = $term->name;
