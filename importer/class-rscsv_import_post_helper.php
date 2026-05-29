@@ -11,9 +11,196 @@ class RSCSV_Import_Post_Helper
     const SCF_PREFIX = 'scf_';
     
     /**
+     * @var string Basic Auth Username
+     */
+    public static $basic_auth_user;
+
+    /**
+     * @var string Basic Auth Password
+     */
+    public static $basic_auth_pass;
+
+    /**
      * @var $post WP_Post object
      */
     private $post;
+
+    /**
+     * @var $term WP_Term object
+     */
+    private $term;
+
+    /**
+     * Set WP_Term object
+     *
+     * @param (int) $term_id Term ID
+     * @param (string) $taxonomy Taxonomy slug
+     */
+    protected function setTerm($term_id, $taxonomy)
+    {
+        $term = get_term($term_id, $taxonomy);
+        if (is_object($term) && !is_wp_error($term)) {
+            $this->term = $term;
+        } else {
+            $this->addError('term_id_not_found', __('Provided Term ID not found.', 'really-simple-csv-importer'));
+        }
+    }
+
+    /**
+     * Get WP_Term object
+     *
+     * @return (WP_Term|null)
+     */
+    public function getTerm()
+    {
+        return $this->term;
+    }
+
+    /**
+     * Get object by term id and taxonomy.
+     *
+     * @param (int) $term_id Term ID
+     * @param (string) $taxonomy Taxonomy slug
+     * @return (RSCSV_Import_Post_Helper)
+     */
+    public static function getTermByID($term_id, $taxonomy)
+    {
+        $object = new RSCSV_Import_Post_Helper();
+        $object->setTerm($term_id, $taxonomy);
+        return $object;
+    }
+
+    /**
+     * Add a term
+     *
+     * @param (array) $data An associative array of the term data
+     * @return (RSCSV_Import_Post_Helper)
+     */
+    public static function addTerm($data)
+    {
+        $object = new RSCSV_Import_Post_Helper();
+        $taxonomy = isset($data['taxonomy']) ? $data['taxonomy'] : 'category';
+        $name = isset($data['name']) ? $data['name'] : '';
+
+        $args = array();
+        if (isset($data['slug'])) $args['slug'] = $data['slug'];
+        if (isset($data['description'])) $args['description'] = $data['description'];
+        if (isset($data['parent'])) $args['parent'] = $data['parent'];
+
+        $term_info = wp_insert_term($name, $taxonomy, $args);
+
+        if (is_wp_error($term_info)) {
+            if ($term_info->get_error_code() === 'term_exists') {
+                $existing_term_id = $term_info->get_error_data();
+                $object->setTerm($existing_term_id, $taxonomy);
+                $object->updateTerm($data);
+            } else {
+                $object->addError($term_info->get_error_code(), $term_info->get_error_message());
+            }
+        } else {
+            $term_id = $term_info['term_id'];
+            // term_idの強制一致化（DB直更新）
+            if (isset($data['term_id']) && (int)$data['term_id'] !== (int)$term_id) {
+                global $wpdb;
+                $old_term_id = (int)$term_id;
+                $new_term_id = (int)$data['term_id'];
+
+                $check = $wpdb->get_var($wpdb->prepare("SELECT term_id FROM $wpdb->terms WHERE term_id = %d", $new_term_id));
+                if (!$check) {
+                    $wpdb->update($wpdb->terms, array('term_id' => $new_term_id), array('term_id' => $old_term_id));
+                    $wpdb->update($wpdb->term_taxonomy, array('term_id' => $new_term_id), array('term_id' => $old_term_id));
+                    $wpdb->update($wpdb->termmeta, array('term_id' => $new_term_id), array('term_id' => $old_term_id));
+                    $term_id = $new_term_id;
+                }
+            }
+            $object->setTerm($term_id, $taxonomy);
+        }
+        return $object;
+    }
+
+    /**
+     * Update term
+     *
+     * @param (array) $data An associative array of the term data
+     */
+    public function updateTerm($data)
+    {
+        $term = $this->getTerm();
+        if ($term instanceof WP_Term) {
+            $taxonomy = $term->taxonomy;
+            $args = array();
+            if (isset($data['name'])) $args['name'] = $data['name'];
+            if (isset($data['slug'])) $args['slug'] = $data['slug'];
+            if (isset($data['description'])) $args['description'] = $data['description'];
+            if (isset($data['parent'])) $args['parent'] = $data['parent'];
+
+            $term_info = wp_update_term($term->term_id, $taxonomy, $args);
+            if (is_wp_error($term_info)) {
+                $this->addError($term_info->get_error_code(), $term_info->get_error_message());
+            } else {
+                $this->setTerm($term->term_id, $taxonomy);
+            }
+        }
+    }
+
+    /**
+     * Set term meta fields by array
+     *
+     * @param (array) $data An associative array of metadata
+     */
+    public function setTermMeta($data)
+    {
+        $term = $this->getTerm();
+        if (!$term instanceof WP_Term) {
+            return;
+        }
+
+        if (empty($data) || !is_array($data)) {
+            return;
+        }
+
+        foreach ($data as $key => $value) {
+            $decoded_value = null;
+            $is_json_array = false;
+            if (is_string($value) && !empty($value)) {
+                $trimmed = trim($value);
+                if ((strpos($trimmed, '[') === 0 && substr($trimmed, -1) === ']') || (strpos($trimmed, '{') === 0 && substr($trimmed, -1) === '}')) {
+                    $decoded = json_decode($trimmed, true);
+                    if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                        $decoded_value = $decoded;
+                        $is_json_array = true;
+                    }
+                }
+            }
+
+            $is_acf = 0;
+            if (function_exists('get_field_object')) {
+                if (strpos($key, 'field_') === 0) {
+                    $fobj = get_field_object($key);
+                    if (is_array($fobj) && isset($fobj['key']) && $fobj['key'] == $key) {
+                        if (is_string($value) && filter_var($value, FILTER_VALIDATE_URL)) {
+                            if (isset($fobj['type']) && ($fobj['type'] === 'image' || $fobj['type'] === 'file')) {
+                                $attachment_id = $this->addMediaFile($value);
+                                if ($attachment_id) {
+                                    $value = $attachment_id;
+                                }
+                            }
+                        }
+                        update_field($key, $value, 'term_' . $term->term_id);
+                        $is_acf = 1;
+                    }
+                } elseif ($is_json_array) {
+                    $decoded_value = $this->processAcfArrayImages($decoded_value);
+                    update_field($key, $decoded_value, 'term_' . $term->term_id);
+                    $is_acf = 1;
+                }
+            }
+
+            if (!$is_acf) {
+                update_term_meta($term->term_id, $key, $value);
+            }
+        }
+    }
     
     /**
      * @var $error WP_Error object
@@ -555,8 +742,41 @@ class RSCSV_Import_Post_Helper
         }
         
         if ($url && is_object($wp_filesystem)) {
+            // URL自体に埋め込まれている認証情報の解析
+            $parsed_url = parse_url($url);
+            $auth_user = '';
+            $auth_pass = '';
+            if (isset($parsed_url['user']) && isset($parsed_url['pass'])) {
+                $auth_user = urldecode($parsed_url['user']);
+                $auth_pass = urldecode($parsed_url['pass']);
+                // 認証情報を除いたきれいなURLに再構成
+                $url_scheme   = isset($parsed_url['scheme']) ? $parsed_url['scheme'] . '://' : '';
+                $url_host     = isset($parsed_url['host']) ? $parsed_url['host'] : '';
+                $url_port     = isset($parsed_url['port']) ? ':' . $parsed_url['port'] : '';
+                $url_path     = isset($parsed_url['path']) ? $parsed_url['path'] : '';
+                $url_query    = isset($parsed_url['query']) ? '?' . $parsed_url['query'] : '';
+                $url_fragment = isset($parsed_url['fragment']) ? '#' . $parsed_url['fragment'] : '';
+                $url = $url_scheme . $url_host . $url_port . $url_path . $url_query . $url_fragment;
+            }
+            
+            // 入力されたBasic認証情報またはURLから取得した情報を使用
+            $user = !empty(self::$basic_auth_user) ? self::$basic_auth_user : $auth_user;
+            $pass = !empty(self::$basic_auth_pass) ? self::$basic_auth_pass : $auth_pass;
+            
+            if (!empty($user) && !empty($pass)) {
+                if (!isset($args['headers'])) {
+                    $args['headers'] = array();
+                }
+                $args['headers']['Authorization'] = 'Basic ' . base64_encode($user . ':' . $pass);
+            }
+
             $response = wp_safe_remote_get($url, $args);
-            if (!is_wp_error($response) && $response['response']['code'] === 200) {
+            if (is_wp_error($response)) {
+                // wp_safe_remote_getがエラーの場合はwp_remote_getで再試行（ローカルIP制限対策）
+                $response = wp_remote_get($url, $args);
+            }
+
+            if (!is_wp_error($response) && isset($response['response']['code']) && $response['response']['code'] === 200) {
                 $destination = wp_upload_dir();
                 $filename = basename($url);
                 $filepath = $destination['path'] . '/' . wp_unique_filename($destination['path'], $filename);
@@ -570,6 +790,9 @@ class RSCSV_Import_Post_Helper
                 }
             } elseif (is_wp_error($response)) {
                 $this->addError($response->get_error_code(), $response->get_error_message());
+            } else {
+                $status_code = isset($response['response']['code']) ? $response['response']['code'] : 'Unknown';
+                $this->addError('remote_get_failed_status', sprintf('Could not get remote file. HTTP Status Code: %s', $status_code));
             }
         }
         
