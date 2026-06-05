@@ -24,6 +24,12 @@ class RS_CSV_Helper {
 		$bom = pack("CCC", 0xef, 0xbb, 0xbf);
 		if (0 == strncmp($array[0], $bom, 3)) {
 		    $array[0] = substr($array[0], 3);
+		    // BOMが先頭にあると fgetcsv は1列目の囲みクォートを除去できず
+		    // 「"post_id"」のように残ってしまう。BOM除去後にクォートが残っていれば手動で剥がす
+		    // （BOM＋全項目クォートのCSVで1列目名が壊れ、post_id等が認識されない不具合の対策）。
+		    if (strlen($array[0]) >= 2 && $array[0][0] === '"' && substr($array[0], -1) === '"') {
+		        $array[0] = str_replace('""', '"', substr($array[0], 1, -1));
+		    }
 		}
 
 		$keys = array_keys($array);
