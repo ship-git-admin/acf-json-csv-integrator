@@ -271,6 +271,18 @@ class RS_CSV_Importer extends WP_Importer {
 
 					$parent = $h->get_data($this, $data, 'parent');
 					if ($parent) {
+						// parent が数値以外（スラッグ/名前）の場合は、同タクソノミー内の既存タームを
+						// 検索して term_id に解決する。これにより親IDを知らなくても、親を先頭に並べた
+						// 1ファイルで親子階層を構築できる（親→子の順で取り込まれる前提）。
+						if (!is_numeric($parent)) {
+							$parent_term = get_term_by('slug', $parent, $taxonomy);
+							if (!$parent_term) {
+								$parent_term = get_term_by('name', $parent, $taxonomy);
+							}
+							if ($parent_term && !is_wp_error($parent_term)) {
+								$parent = $parent_term->term_id;
+							}
+						}
 						$term_data['parent'] = $parent;
 					}
 
