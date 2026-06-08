@@ -115,15 +115,104 @@ class RS_CSV_Importer extends WP_Importer {
 		$this->id = (int) $file['id'];
 		$this->file = get_attached_file($this->id);
 
-		// Basic認証情報を取得しヘルパーにセット
-		if (class_exists('RSCSV_Import_Post_Helper')) {
-			RSCSV_Import_Post_Helper::$basic_auth_user = isset($_POST['basic_auth_user']) ? sanitize_text_field($_POST['basic_auth_user']) : '';
-			RSCSV_Import_Post_Helper::$basic_auth_pass = isset($_POST['basic_auth_pass']) ? sanitize_text_field($_POST['basic_auth_pass']) : '';
-		}
+		// フォームから渡されたBasic認証情報を一時保存
+		$basic_auth_user = isset($_POST['basic_auth_user']) ? sanitize_text_field($_POST['basic_auth_user']) : '';
+		$basic_auth_pass = isset($_POST['basic_auth_pass']) ? sanitize_text_field($_POST['basic_auth_pass']) : '';
 
-		$result = $this->process_posts();
-		if ( is_wp_error( $result ) )
-			return $result;
+		// AJAXバッチ処理用のUIとJSを出力する
+		$this->render_batch_ui($this->id, $basic_auth_user, $basic_auth_pass);
+	}
+
+	function render_batch_ui($attachment_id, $basic_auth_user, $basic_auth_pass) {
+		// Count total lines in CSV
+		$h = new RS_CSV_Helper;
+		$handle = $h->fopen($this->file, 'r');
+		$total_rows = 0;
+		if ($handle !== false) {
+			while (($data = $h->fgetcsv($handle)) !== FALSE) {
+				$total_rows++;
+			}
+			$h->fclose($handle);
+		}
+		$total_data_rows = max(0, $total_rows - 1); // Exclude header
+		
+		echo '<div id="rs-csv-batch-import-wrap" style="max-width:800px; margin-top:20px;">';
+		echo '<h2>インポートを実行中...</h2>';
+		echo '<p>総件数: <strong id="rs-csv-total">'.$total_data_rows.'</strong>件 / 完了: <strong id="rs-csv-processed">0</strong>件</p>';
+		echo '<div style="width:100%; background:#e5e5e5; height:24px; border-radius:3px; margin-bottom:20px; overflow:hidden;"><div id="rs-csv-progress" style="width:0%; background:#2271b1; height:100%; transition:width 0.3s ease-in-out;"></div></div>';
+		echo '<div style="background:#fff; border:1px solid #ccd0d4; padding:10px; max-height:300px; overflow-y:auto;">';
+		echo '<ol id="rs-csv-log" style="margin:0; padding-left:20px;"></ol>';
+		echo '</div>';
+		echo '<h3 id="rs-csv-complete-msg" style="display:none; color:#007017; margin-top:20px;">'.__('All Done.', 'really-simple-csv-importer').'</h3>';
+		echo '</div>';
+		?>
+		<script type="text/javascript">
+		jQuery(document).ready(function($){
+			var attachment_id = <?php echo (int) $attachment_id; ?>;
+			var total_rows = <?php echo (int) $total_data_rows; ?>;
+			var basic_auth_user = <?php echo json_encode($basic_auth_user); ?>;
+			var basic_auth_pass = <?php echo json_encode($basic_auth_pass); ?>;
+			var processed = 0;
+			var offset = 1; // Start after header
+			var limit = 5; // Rows per batch
+
+			function run_batch() {
+				if (offset > total_rows || total_rows === 0) {
+					// Done
+					$.post(ajaxurl, {
+						action: 'rs_csv_import_cleanup',
+						attachment_id: attachment_id
+					}, function(){
+						$('#rs-csv-complete-msg').show();
+					});
+					return;
+				}
+
+				$.ajax({
+					url: ajaxurl,
+					type: 'POST',
+					data: {
+						action: 'rs_csv_import_chunk',
+						attachment_id: attachment_id,
+						offset: offset,
+						limit: limit,
+						basic_auth_user: basic_auth_user,
+						basic_auth_pass: basic_auth_pass
+					},
+					dataType: 'json',
+					success: function(response) {
+						if(response.success) {
+							if (response.data.log) {
+								$('#rs-csv-log').append(response.data.log);
+								var logDiv = $('#rs-csv-log').parent();
+								logDiv.scrollTop(logDiv[0].scrollHeight);
+							}
+							processed += response.data.processed;
+							offset = response.data.next_offset;
+							
+							var percent = total_rows > 0 ? Math.min(100, Math.round((processed / total_rows) * 100)) : 100;
+							$('#rs-csv-progress').css('width', percent + '%');
+							$('#rs-csv-processed').text(processed);
+
+							run_batch();
+						} else {
+							alert('Error: ' + (response.data || 'Unknown error'));
+						}
+					},
+					error: function(xhr, status, error) {
+						alert('Ajax Error: ' + error);
+					}
+				});
+			}
+
+			if (total_rows > 0) {
+				run_batch();
+			} else {
+				$('#rs-csv-complete-msg').show().text('CSVファイルにデータがありません。');
+			}
+		});
+		</script>
+		<?php
 	}
 	
 	/**
@@ -225,6 +314,20 @@ class RS_CSV_Importer extends WP_Importer {
 				// CSVに taxonomy 列が含まれている場合はターム（タクソノミー）インポートとして扱う
 				$is_term_import = in_array('taxonomy', $this->column_keys);
 			} else {
+				$this->process_single_row($data, $h, $is_term_import, $post_statuses);
+			}
+		}
+		
+		echo '</ol>';
+
+		$h->fclose($handle);
+		
+		wp_import_cleanup($this->id);
+		
+		echo '<h3>'.__('All Done.', 'really-simple-csv-importer').'</h3>';
+	}
+
+		public function process_single_row($data, $h, $is_term_import, $post_statuses) {
 				echo '<li>';
 				
 				$post = array();
@@ -545,18 +648,7 @@ class RS_CSV_Importer extends WP_Importer {
 				}
 				
 				echo '</li>';
-			}
-		}
-		
-		echo '</ol>';
-
-		$h->fclose($handle);
-		
-		wp_import_cleanup($this->id);
-		
-		echo '<h3>'.__('All Done.', 'really-simple-csv-importer').'</h3>';
 	}
-
 	// dispatcher
 	function dispatch() {
 		$this->header();
@@ -606,4 +698,80 @@ add_filter('site_transient_update_plugins', function($transient) {
     return $transient;
 });
 
+
+// AJAX バッチ処理のハンドラー
+add_action('wp_ajax_rs_csv_import_chunk', 'rs_csv_import_chunk_handler');
+function rs_csv_import_chunk_handler() {
+	if (!current_user_can('import')) {
+		wp_send_json_error('Permission denied');
+	}
+
+	$attachment_id = isset($_POST['attachment_id']) ? (int) $_POST['attachment_id'] : 0;
+	$offset = isset($_POST['offset']) ? (int) $_POST['offset'] : 1;
+	$limit = isset($_POST['limit']) ? (int) $_POST['limit'] : 5;
+	$basic_auth_user = isset($_POST['basic_auth_user']) ? sanitize_text_field($_POST['basic_auth_user']) : '';
+	$basic_auth_pass = isset($_POST['basic_auth_pass']) ? sanitize_text_field($_POST['basic_auth_pass']) : '';
+
+	if (!$attachment_id) wp_send_json_error('No attachment ID');
+
+	$file = get_attached_file($attachment_id);
+	if (!$file || !file_exists($file)) {
+		wp_send_json_error('File not found');
+	}
+
+	if (class_exists('RSCSV_Import_Post_Helper')) {
+		RSCSV_Import_Post_Helper::$basic_auth_user = $basic_auth_user;
+		RSCSV_Import_Post_Helper::$basic_auth_pass = $basic_auth_pass;
+	}
+
+	$importer = new RS_CSV_Importer();
+	$importer->id = $attachment_id;
+	$importer->file = $file;
+
+	$h = new RS_CSV_Helper;
+	$handle = $h->fopen($file, 'r');
+	if ($handle == false) {
+		wp_send_json_error('Failed to open file');
+	}
+
+	// Read header
+	$header = $h->fgetcsv($handle);
+	$importer->parse_columns($importer, $header);
+	$is_term_import = in_array('taxonomy', $importer->column_keys);
+
+	// Seek to offset
+	$current_row = 1;
+	while ($current_row < $offset && ($data = $h->fgetcsv($handle)) !== FALSE) {
+		$current_row++;
+	}
+
+	$processed = 0;
+	$post_statuses = get_post_stati();
+	
+	ob_start();
+	while ($processed < $limit && ($data = $h->fgetcsv($handle)) !== FALSE) {
+		$importer->process_single_row($data, $h, $is_term_import, $post_statuses);
+		$processed++;
+		$current_row++;
+	}
+	$log = ob_get_clean();
+
+	$h->fclose($handle);
+
+	wp_send_json_success(array(
+		'processed' => $processed,
+		'next_offset' => $current_row,
+		'log' => $log
+	));
+}
+
+add_action('wp_ajax_rs_csv_import_cleanup', 'rs_csv_import_cleanup_handler');
+function rs_csv_import_cleanup_handler() {
+	if (!current_user_can('import')) wp_send_json_error('Permission denied');
+	$attachment_id = isset($_POST['attachment_id']) ? (int) $_POST['attachment_id'] : 0;
+	if ($attachment_id) {
+		wp_import_cleanup($attachment_id);
+	}
+	wp_send_json_success();
+}
 } // class_exists( 'WP_Importer' )

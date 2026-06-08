@@ -4,6 +4,9 @@ An integrated tool to export and import ACF (Advanced Custom Fields) flexible co
 
 ## Changelog
 
+### 1.0.9 (2026-06-08)
+- インポート処理をAjaxによるバッチ処理に変更。大容量CSVインポート時のタイムアウトおよびメモリエラーを解消。
+
 ### 1.0.8 (2026-06-05)
 - 不具合修正: BOM付き＋全項目クォートのCSVで1列目のカラム名が壊れ（例: `"post_id"`）、post_id等が認識されず更新できない問題を修正（BOM除去後に残る囲みクォートを除去）。
 
