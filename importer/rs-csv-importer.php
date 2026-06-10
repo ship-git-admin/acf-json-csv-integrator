@@ -753,7 +753,7 @@ function rs_csv_import_chunk_handler() {
 
 	// Read header
 	$header = $h->fgetcsv($handle);
-	$importer->parse_columns($importer, $header);
+	$h->parse_columns($importer, $header);
 	$is_term_import = in_array('taxonomy', $importer->column_keys);
 
 	// Seek to offset

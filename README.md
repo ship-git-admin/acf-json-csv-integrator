@@ -4,6 +4,9 @@ An integrated tool to export and import ACF (Advanced Custom Fields) flexible co
 
 ## Changelog
 
+### 1.0.12 (2026-06-10)
+- 不具合修正: Ajaxハンドラー内でヘッダー行を解析する際、`$importer->parse_columns` を誤って呼び出していた記述を `$h->parse_columns` （正しくはヘルパークラスのメソッド）へ修正。
+
 ### 1.0.11 (2026-06-10)
 - 不具合修正: Ajaxバッチ処理中に `wp_create_categories` などの管理画面用関数が未定義となり 500エラーになる問題への対策として、必要なコアファイル (`taxonomy.php`, `image.php`, `file.php`, `media.php`) を明示的に読み込むよう修正。
 - 改善: Ajax処理中にFatal Errorが発生した場合、500エラーではなくエラー内容をJSON（アラート表示）で返すようにエラーハンドリングを追加。
