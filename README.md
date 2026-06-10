@@ -4,6 +4,9 @@ An integrated tool to export and import ACF (Advanced Custom Fields) flexible co
 
 ## Changelog
 
+### 1.0.10 (2026-06-10)
+- 不具合修正: Ajaxリクエスト時に `WP_LOAD_IMPORTERS` が未定義のためインポーターモジュールが読み込まれず、バッチ処理で 400 Bad Request が発生する問題を修正。
+
 ### 1.0.9 (2026-06-08)
 - インポート処理をAjaxによるバッチ処理に変更。大容量CSVインポート時のタイムアウトおよびメモリエラーを解消。
 
