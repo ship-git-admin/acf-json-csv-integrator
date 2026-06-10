@@ -3,8 +3,12 @@
  * Importer Module (Consolidated under ACF JSON CSV Integrator)
  */
 
-if ( !defined('WP_LOAD_IMPORTERS') )
+if ( !defined('WP_LOAD_IMPORTERS') && !(defined('DOING_AJAX') && DOING_AJAX) )
 	return;
+
+if ( defined('DOING_AJAX') && DOING_AJAX && !defined('WP_LOAD_IMPORTERS') ) {
+	define('WP_LOAD_IMPORTERS', true);
+}
 
 // Load Importer API
 require_once ABSPATH . 'wp-admin/includes/import.php';
