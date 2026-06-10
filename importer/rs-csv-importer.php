@@ -706,7 +706,20 @@ add_filter('site_transient_update_plugins', function($transient) {
 // AJAX バッチ処理のハンドラー
 add_action('wp_ajax_rs_csv_import_chunk', 'rs_csv_import_chunk_handler');
 function rs_csv_import_chunk_handler() {
-	if (!current_user_can('import')) {
+	// Debug handler
+	set_error_handler(function($errno, $errstr, $errfile, $errline) {
+		if (!(error_reporting() & $errno)) return;
+		throw new ErrorException($errstr, 0, $errno, $errfile, $errline);
+	});
+
+	try {
+		// 必要な管理画面用ファイルを読み込む
+		require_once(ABSPATH . 'wp-admin/includes/taxonomy.php');
+		require_once(ABSPATH . 'wp-admin/includes/image.php');
+		require_once(ABSPATH . 'wp-admin/includes/file.php');
+		require_once(ABSPATH . 'wp-admin/includes/media.php');
+
+		if (!current_user_can('import')) {
 		wp_send_json_error('Permission denied');
 	}
 
@@ -767,6 +780,13 @@ function rs_csv_import_chunk_handler() {
 		'next_offset' => $current_row,
 		'log' => $log
 	));
+	} catch (Exception $e) {
+		wp_send_json_error('Error: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+	} catch (Error $e) {
+		wp_send_json_error('Fatal Error: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+	} finally {
+		restore_error_handler();
+	}
 }
 
 add_action('wp_ajax_rs_csv_import_cleanup', 'rs_csv_import_cleanup_handler');
