@@ -308,6 +308,7 @@ class RS_CSV_Importer extends WP_Importer {
 		$is_first = true;
 		$post_statuses = get_post_stati();
 		$is_term_import = false;
+		$is_options_import = false;
 		
 		echo '<ol>';
 		
@@ -317,8 +318,9 @@ class RS_CSV_Importer extends WP_Importer {
 				$is_first = false;
 				// CSVに taxonomy 列が含まれている場合はターム（タクソノミー）インポートとして扱う
 				$is_term_import = in_array('taxonomy', $this->column_keys);
+				$is_options_import = in_array('options_page_id', $this->column_keys);
 			} else {
-				$this->process_single_row($data, $h, $is_term_import, $post_statuses);
+				$this->process_single_row($data, $h, $is_term_import, $is_options_import, $post_statuses);
 			}
 		}
 		
@@ -331,14 +333,47 @@ class RS_CSV_Importer extends WP_Importer {
 		echo '<h3>'.__('All Done.', 'really-simple-csv-importer').'</h3>';
 	}
 
-		public function process_single_row($data, $h, $is_term_import, $post_statuses) {
+		public function process_single_row($data, $h, $is_term_import, $is_options_import, $post_statuses) {
 				echo '<li>';
 				
 				$post = array();
 				$is_update = false;
 				$error = new WP_Error();
 				
-				if ($is_term_import) {
+				if ($is_options_import) {
+					$options_page_id = $h->get_data($this, $data, 'options_page_id');
+					if (!$options_page_id) {
+						$error->add('options_page_id_empty', 'options_page_id列が空です。');
+					}
+
+					if (!$error->get_error_codes()) {
+						// 各カラムの値をオプションに保存
+						foreach ($data as $key => $value) {
+							if ($value !== false && isset($this->column_keys[$key])) {
+								$col_key = $this->column_keys[$key];
+								if ($col_key === 'options_page_id') {
+									continue;
+								}
+
+								// JSON 文字列の場合はデコード（ACFの配列データ対応）
+								$decoded_value = json_decode($value, true);
+								if ($decoded_value !== null || $value === '[]' || $value === '{}') {
+									$final_value = $decoded_value;
+								} else {
+									$final_value = $value;
+								}
+
+								// ACFの update_field が使えるなら使い、そうでなければ update_option を使う
+								if (function_exists('update_field')) {
+									update_field($col_key, $final_value, $options_page_id);
+								} else {
+									update_option($options_page_id . '_' . $col_key, $final_value);
+								}
+							}
+						}
+						echo esc_html(sprintf('オプションページ "%s" の設定を更新しました。', $options_page_id));
+					}
+				} else if ($is_term_import) {
 					$term_data = array();
 					
 					$taxonomy = $h->get_data($this, $data, 'taxonomy');
@@ -755,6 +790,7 @@ function rs_csv_import_chunk_handler() {
 	$header = $h->fgetcsv($handle);
 	$h->parse_columns($importer, $header);
 	$is_term_import = in_array('taxonomy', $importer->column_keys);
+	$is_options_import = in_array('options_page_id', $importer->column_keys);
 
 	// Seek to offset
 	$current_row = 1;
@@ -767,7 +803,7 @@ function rs_csv_import_chunk_handler() {
 	
 	ob_start();
 	while ($processed < $limit && ($data = $h->fgetcsv($handle)) !== FALSE) {
-		$importer->process_single_row($data, $h, $is_term_import, $post_statuses);
+		$importer->process_single_row($data, $h, $is_term_import, $is_options_import, $post_statuses);
 		$processed++;
 		$current_row++;
 	}

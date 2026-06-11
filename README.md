@@ -4,6 +4,10 @@ An integrated tool to export and import ACF (Advanced Custom Fields) flexible co
 
 ## Changelog
 
+### 1.0.13 (2026-06-11)
+- 新機能: オプションページデータ（`options_page_id`を含むCSV）のインポート処理を実装。
+- 不具合修正: オプションページインポート時に `post_type` 不足の警告文（HTML）がAjaxレスポンスのJSONの前に出力されてしまい、フロントエンド側で `SyntaxError: Unexpected token '<'` が発生する問題を解消。
+
 ### 1.0.12 (2026-06-10)
 - 不具合修正: Ajaxハンドラー内でヘッダー行を解析する際、`$importer->parse_columns` を誤って呼び出していた記述を `$h->parse_columns` （正しくはヘルパークラスのメソッド）へ修正。
 
