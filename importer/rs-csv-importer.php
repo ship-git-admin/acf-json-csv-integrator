@@ -396,7 +396,8 @@ class RS_CSV_Importer extends WP_Importer {
 
 								// ACFの update_field が使えるなら使い、そうでなければ update_option を使う
 								if (function_exists('update_field')) {
-									update_field($col_key, $final_value, $options_page_id);
+									$field_key = $helper->getFieldKey($col_key);
+									update_field($field_key, $final_value, $options_page_id);
 								} else {
 									update_option($options_page_id . '_' . $col_key, $final_value);
 								}

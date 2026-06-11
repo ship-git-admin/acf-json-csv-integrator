@@ -4,6 +4,10 @@ An integrated tool to export and import ACF (Advanced Custom Fields) flexible co
 
 ## Changelog
 
+### 1.0.19 (2026-06-11)
+- 改善: 柔軟コンテンツ（Flexible Content）やリピーター等で、インポート時の update_field 呼び出しにフィールド名ではなくACFのフィールドキー（`field_xxx`）を自動逆引きして使用するように修正。これにより、ターム（カテゴリ）等で柔軟コンテンツデータが正常に保存されない不具合を解消。
+- 改善: プラグイン更新時、および強制アップデートチェック時（`?force_update_check=1`）に OPcache（PHP キャッシュ）を自動クリアする処理を追加。キャッシュが原因で発生する `Call to undefined method` などの不具合を防止。
+
 ### 1.0.18 (2026-06-11)
 - 不具合修正: Ajaxバッチ処理中に例外・エラーが発生した際、出力バッファにたまっていた `<li>` タグがJSONレスポンスの前に漏れ出てしまい、`SyntaxError` を引き起こす問題を修正（エラー発生時に出力バッファを強制クリアするように対策）。
 
