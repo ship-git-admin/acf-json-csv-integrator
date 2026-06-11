@@ -31,6 +31,12 @@ if (file_exists(AJCI_PLUGIN_DIR . 'lib/plugin-update-checker/plugin-update-check
   // flex-bannerと同じトークンで認証
   $myUpdateChecker->setAuthentication('REDACTED_GITHUB_TOKEN');
   $myUpdateChecker->setBranch('main');
+
+  // クエリパラメータ ?force_update_check=1 が指定された場合、キャッシュを強制クリアしてGitHubに再問い合わせする
+  if (isset($_GET['force_update_check']) && is_admin()) {
+    $myUpdateChecker->getUpdateState()->setLastCheckToZero();
+    $myUpdateChecker->checkForUpdates();
+  }
 }
 
 // ==========================================
