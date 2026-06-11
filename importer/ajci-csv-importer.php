@@ -20,8 +20,8 @@ if ( !class_exists( 'WP_Importer' ) ) {
 }
 
 // Load Helpers
-require dirname( __FILE__ ) . '/class-rs_csv_helper.php';
-require dirname( __FILE__ ) . '/class-rscsv_import_post_helper.php';
+require dirname( __FILE__ ) . '/class-ajci_csv_helper.php';
+require dirname( __FILE__ ) . '/class-ajci_import_post_helper.php';
 
 /**
  * CSV Importer
@@ -30,7 +30,7 @@ require dirname( __FILE__ ) . '/class-rscsv_import_post_helper.php';
  * @subpackage Importer
  */
 if ( class_exists( 'WP_Importer' ) ) {
-class RS_CSV_Importer extends WP_Importer {
+class AJCI_CSV_Importer extends WP_Importer {
 	
 	/** Sheet columns
 	* @value array
@@ -56,7 +56,7 @@ class RS_CSV_Importer extends WP_Importer {
 		echo '<p>'.__( 'Requirements:', 'really-simple-csv-importer' ).'</p>';
 		echo '<ol>';
 		echo '<li>'.__( 'Select UTF-8 as charset.', 'really-simple-csv-importer' ).'</li>';
-		echo '<li>'.sprintf( __( 'You must use field delimiter as "%s"', 'really-simple-csv-importer'), RS_CSV_Helper::DELIMITER ).'</li>';
+		echo '<li>'.sprintf( __( 'You must use field delimiter as "%s"', 'really-simple-csv-importer'), AJCI_CSV_Helper::DELIMITER ).'</li>';
 		echo '<li>'.__( 'You must quote all text cells.', 'really-simple-csv-importer' ).'</li>';
 		echo '</ol>';
 		echo '<p>'.__( 'Download example CSV files:', 'really-simple-csv-importer' );
@@ -129,7 +129,7 @@ class RS_CSV_Importer extends WP_Importer {
 
 	function render_batch_ui($attachment_id, $basic_auth_user, $basic_auth_pass) {
 		// Count total lines in CSV
-		$h = new RS_CSV_Helper;
+		$h = new AJCI_CSV_Helper;
 		$handle = $h->fopen($this->file, 'r');
 		$total_rows = 0;
 		if ($handle !== false) {
@@ -164,7 +164,7 @@ class RS_CSV_Importer extends WP_Importer {
 				if (offset > total_rows || total_rows === 0) {
 					// Done
 					$.post(ajaxurl, {
-						action: 'rs_csv_import_cleanup',
+						action: 'ajci_csv_import_cleanup',
 						attachment_id: attachment_id
 					}, function(){
 						$('#rs-csv-complete-msg').show();
@@ -176,7 +176,7 @@ class RS_CSV_Importer extends WP_Importer {
 					url: ajaxurl,
 					type: 'POST',
 					data: {
-						action: 'rs_csv_import_chunk',
+						action: 'ajci_csv_import_chunk',
 						attachment_id: attachment_id,
 						offset: offset,
 						limit: limit,
@@ -220,14 +220,14 @@ class RS_CSV_Importer extends WP_Importer {
 	}
 	
 	/**
-	* Insert post and postmeta using `RSCSV_Import_Post_Helper` class.
+	* Insert post and postmeta using `AJCI_Import_Post_Helper` class.
 	*
 	* @param array $post
 	* @param array $meta
 	* @param array $terms
 	* @param string $thumbnail The uri or path of thumbnail image.
 	* @param bool $is_update
-	* @return RSCSV_Import_Post_Helper
+	* @return AJCI_Import_Post_Helper
 	*/
 	public function save_post($post,$meta,$terms,$thumbnail,$is_update) {
 		
@@ -245,10 +245,10 @@ class RS_CSV_Importer extends WP_Importer {
 
 		// Add or update the post
 		if ($is_update) {
-			$h = RSCSV_Import_Post_Helper::getByID($post['ID']);
+			$h = AJCI_Import_Post_Helper::getByID($post['ID']);
 			$h->update($post);
 		} else {
-			$h = RSCSV_Import_Post_Helper::add($post);
+			$h = AJCI_Import_Post_Helper::add($post);
 		}
 		
 		// Set post tags
@@ -273,19 +273,19 @@ class RS_CSV_Importer extends WP_Importer {
 	}
 
 	/**
-	* Insert term and termmeta using `RSCSV_Import_Post_Helper` class.
+	* Insert term and termmeta using `AJCI_Import_Post_Helper` class.
 	*
 	* @param array $term_data
 	* @param array $meta
 	* @param bool $is_update
-	* @return RSCSV_Import_Post_Helper
+	* @return AJCI_Import_Post_Helper
 	*/
 	public function save_term($term_data, $meta, $is_update) {
 		if ($is_update) {
-			$h = RSCSV_Import_Post_Helper::getTermByID($term_data['term_id'], $term_data['taxonomy']);
+			$h = AJCI_Import_Post_Helper::getTermByID($term_data['term_id'], $term_data['taxonomy']);
 			$h->updateTerm($term_data);
 		} else {
-			$h = RSCSV_Import_Post_Helper::addTerm($term_data);
+			$h = AJCI_Import_Post_Helper::addTerm($term_data);
 		}
 		
 		// Set term meta data
@@ -296,7 +296,7 @@ class RS_CSV_Importer extends WP_Importer {
 
 	// process parse csv ind insert posts
 	function process_posts() {
-		$h = new RS_CSV_Helper;
+		$h = new AJCI_CSV_Helper;
 
 		$handle = $h->fopen($this->file, 'r');
 		if ( $handle == false ) {
@@ -348,7 +348,7 @@ class RS_CSV_Importer extends WP_Importer {
 
 					if (!$error->get_error_codes()) {
 						// 画像再紐付け用のヘルパーインスタンスを作成
-						$helper = new RSCSV_Import_Post_Helper();
+						$helper = new AJCI_Import_Post_Helper();
 
 						// 各カラムの値をオプションに保存
 						foreach ($data as $key => $value) {
@@ -755,7 +755,7 @@ add_action( 'init', 'really_simple_csv_importer_load_textdomain' );
 
 // インポーターを admin_init で登録（init 後なので翻訳が確実に読み込まれた後に実行される）
 function really_simple_csv_importer() {
-    $rs_csv_importer = new RS_CSV_Importer();
+    $rs_csv_importer = new AJCI_CSV_Importer();
     register_importer('csv', __('CSV', 'really-simple-csv-importer'), __('Import posts, categories, tags, custom fields from simple csv file.', 'really-simple-csv-importer'), array ($rs_csv_importer, 'dispatch'));
 }
 add_action( 'admin_init', 'really_simple_csv_importer' );
@@ -771,8 +771,8 @@ add_filter('site_transient_update_plugins', function($transient) {
 
 
 // AJAX バッチ処理のハンドラー
-add_action('wp_ajax_rs_csv_import_chunk', 'rs_csv_import_chunk_handler');
-function rs_csv_import_chunk_handler() {
+add_action('wp_ajax_ajci_csv_import_chunk', 'ajci_csv_import_chunk_handler');
+function ajci_csv_import_chunk_handler() {
 	// Debug handler
 	set_error_handler(function($errno, $errstr, $errfile, $errline) {
 		if (!(error_reporting() & $errno)) return;
@@ -803,16 +803,29 @@ function rs_csv_import_chunk_handler() {
 		wp_send_json_error('File not found');
 	}
 
-	if (class_exists('RSCSV_Import_Post_Helper')) {
-		RSCSV_Import_Post_Helper::$basic_auth_user = $basic_auth_user;
-		RSCSV_Import_Post_Helper::$basic_auth_pass = $basic_auth_pass;
+	if (class_exists('AJCI_Import_Post_Helper')) {
+		AJCI_Import_Post_Helper::$basic_auth_user = $basic_auth_user;
+		AJCI_Import_Post_Helper::$basic_auth_pass = $basic_auth_pass;
+		
+		// デバッグ: processAcfArrayImages の定義チェックとファイルパス特定
+		if (!method_exists('AJCI_Import_Post_Helper', 'processAcfArrayImages')) {
+			try {
+				$reflector = new ReflectionClass('AJCI_Import_Post_Helper');
+				$filePath = $reflector->getFileName();
+				wp_send_json_error('Debug Error: AJCI_Import_Post_Helper::processAcfArrayImages が未定義です。ロードされたファイル: ' . $filePath);
+			} catch (Exception $e) {
+				wp_send_json_error('Debug Error: AJCI_Import_Post_Helper::processAcfArrayImages が未定義です。リフレクション失敗: ' . $e->getMessage());
+			}
+		}
+	} else {
+		wp_send_json_error('Debug Error: AJCI_Import_Post_Helper クラスがロードされていません。');
 	}
 
-	$importer = new RS_CSV_Importer();
+	$importer = new AJCI_CSV_Importer();
 	$importer->id = $attachment_id;
 	$importer->file = $file;
 
-	$h = new RS_CSV_Helper;
+	$h = new AJCI_CSV_Helper;
 	$handle = $h->fopen($file, 'r');
 	if ($handle == false) {
 		wp_send_json_error('Failed to open file');
@@ -863,8 +876,8 @@ function rs_csv_import_chunk_handler() {
 	}
 }
 
-add_action('wp_ajax_rs_csv_import_cleanup', 'rs_csv_import_cleanup_handler');
-function rs_csv_import_cleanup_handler() {
+add_action('wp_ajax_ajci_csv_import_cleanup', 'ajci_csv_import_cleanup_handler');
+function ajci_csv_import_cleanup_handler() {
 	if (!current_user_can('import')) wp_send_json_error('Permission denied');
 	$attachment_id = isset($_POST['attachment_id']) ? (int) $_POST['attachment_id'] : 0;
 	if ($attachment_id) {
