@@ -178,11 +178,16 @@ class RSCSV_Import_Post_Helper
                 if (strpos($key, 'field_') === 0) {
                     $fobj = get_field_object($key);
                     if (is_array($fobj) && isset($fobj['key']) && $fobj['key'] == $key) {
-                        if (is_string($value) && filter_var($value, FILTER_VALIDATE_URL)) {
-                            if (isset($fobj['type']) && ($fobj['type'] === 'image' || $fobj['type'] === 'file')) {
+                        if (isset($fobj['type']) && ($fobj['type'] === 'image' || $fobj['type'] === 'file')) {
+                            if (is_string($value) && filter_var($value, FILTER_VALIDATE_URL)) {
                                 $attachment_id = $this->addMediaFile($value);
                                 if ($attachment_id) {
                                     $value = $attachment_id;
+                                }
+                            } elseif (is_numeric($value) || (is_string($value) && ctype_digit($value))) {
+                                $new_id = $this->resolveImageId($value);
+                                if ($new_id) {
+                                    $value = $new_id;
                                 }
                             }
                         }
@@ -373,12 +378,16 @@ class RSCSV_Import_Post_Helper
                     if (strpos($key, 'field_') === 0) {
                         $fobj = get_field_object($key);
                         if (is_array($fobj) && isset($fobj['key']) && $fobj['key'] == $key) {
-                            // 単一の画像/ファイルフィールドかつ値がURLの場合、ダウンロードしてメディア登録しIDに置換
-                            if (is_string($value) && filter_var($value, FILTER_VALIDATE_URL)) {
-                                if (isset($fobj['type']) && ($fobj['type'] === 'image' || $fobj['type'] === 'file')) {
+                            if (isset($fobj['type']) && ($fobj['type'] === 'image' || $fobj['type'] === 'file')) {
+                                if (is_string($value) && filter_var($value, FILTER_VALIDATE_URL)) {
                                     $attachment_id = $this->addMediaFile($value);
                                     if ($attachment_id) {
                                         $value = $attachment_id;
+                                    }
+                                } elseif (is_numeric($value) || (is_string($value) && ctype_digit($value))) {
+                                    $new_id = $this->resolveImageId($value);
+                                    if ($new_id) {
+                                        $value = $new_id;
                                     }
                                 }
                             }
@@ -482,7 +491,7 @@ class RSCSV_Import_Post_Helper
         }
 
         return $array;
-    }��
+    }
                 if ($is_image_field && filter_var($value, FILTER_VALIDATE_URL)) {
                     $attachment_id = $this->addMediaFile($value);
                     if ($attachment_id) {
