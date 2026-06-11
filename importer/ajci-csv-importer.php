@@ -414,9 +414,13 @@ class AJCI_CSV_Importer extends WP_Importer {
 										// ※ update_field は値が不変の場合も false を返すため、戻り値は失敗判定に使わない
 										update_field($field_key, $final_value, $options_page_id);
 									} elseif ($is_json_array) {
-										// キー未解決の配列値を update_option で生のまま書くとACFのデータ構造を破壊し
-										// 「Cannot access offset of type array」等の致命的エラーを引き起こすためスキップする
-										echo esc_html(sprintf('⚠️ 警告: フィールド "%s" のACFフィールドキーを解決できなかったため、データ破損を避けてスキップしました。インポート先でACFフィールドグループが同期・有効化されているかご確認ください。<br>', $col_key));
+										if ($helper->hasParentColumn($col_key, array_values($this->column_keys))) {
+											// 親グループ列が存在する場合はそちら経由で取り込まれるため黙ってスキップ
+										} else {
+											// キー未解決の配列値を update_option で生のまま書くとACFのデータ構造を破壊し
+											// 「Cannot access offset of type array」等の致命的エラーを引き起こすためスキップする
+											echo esc_html(sprintf('⚠️ 警告: フィールド "%s" のACFフィールドキーを解決できなかったため、データ破損を避けてスキップしました。インポート先でACFフィールドグループが同期・有効化されているかご確認ください。<br>', $col_key));
+										}
 									} else {
 										// スカラー値はACF構造を壊さないため update_field でそのまま保存する
 										update_field($field_key, $final_value, $options_page_id);

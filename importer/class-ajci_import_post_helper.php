@@ -224,15 +224,17 @@ class AJCI_Import_Post_Helper
                         $is_acf = 1;
                     }
                 } elseif ($is_json_array) {
-                    // 配列内の画像をローカルIDに置換
-                    $decoded_value = $this->processAcfArrayImages($decoded_value);
                     // タクソノミーをコンテキストとしてフィールドキーを解決
                     $field_key = $this->getFieldKey($key, array('taxonomy' => $term->taxonomy));
 
                     if (strpos($field_key, 'field_') === 0) {
+                        // 配列内の画像をローカルIDに置換
+                        $decoded_value = $this->processAcfArrayImages($decoded_value);
                         // 正しいフィールドキーで update_field を実行（柔軟コンテンツ・リピーターを正しく保存）
                         // ※ update_field は値が不変の場合も false を返すため、戻り値は失敗判定に使わない
                         update_field($field_key, $decoded_value, 'term_' . $term->term_id);
+                    } elseif ($this->hasParentColumn($key, array_keys($data))) {
+                        // 親グループ列が存在する場合はそちら経由で取り込まれるため黙ってスキップ
                     } else {
                         // キーが解決できない配列値を生のまま term_meta に書くとACFのデータ構造を破壊する。
                         // データ破損を避けるためスキップし、原因（フィールドグループ未同期）を通知する。
@@ -436,12 +438,15 @@ class AJCI_Import_Post_Helper
                             $is_acf = 1;
                         }
                     } elseif ($is_json_array) {
-                        // 配列内の画像URLを自動でダウンロードしてメディア登録しIDに置換
-                        $decoded_value = $this->processAcfArrayImages($decoded_value);
                         $field_key = $this->getFieldKey($key);
                         if (strpos($field_key, 'field_') === 0) {
+                            // 配列内の画像URLを自動でダウンロードしてメディア登録しIDに置換
+                            $decoded_value = $this->processAcfArrayImages($decoded_value);
                             // 正しいフィールドキーで保存（柔軟コンテンツ・リピーターを正しく格納）
                             $this->acfUpdateField($field_key, $decoded_value);
+                        } elseif ($this->hasParentColumn($key, array_keys($data))) {
+                            // 親グループ列が存在する場合、この子フラット列のデータは親列経由で
+                            // 取り込まれるため黙ってスキップする（重複インポート・警告ノイズ防止）
                         } else {
                             // キー未解決の配列値を生メタに書くとACF構造を破壊するためスキップして通知
                             echo esc_html(sprintf('⚠️ 警告: フィールド "%s" のACFフィールドキーを解決できなかったため、データ破損を避けてスキップしました。インポート先でACFフィールドグループが同期・有効化されているかご確認ください。<br>', $key));
@@ -699,29 +704,58 @@ class AJCI_Import_Post_Helper
      * @param (array) $data
      * @return (boolean) True on success, false on failure.
      */
+    /**
+     * $data 配列から旧ID（ID / post_id / import_id）を取り出す
+     *
+     * @param (array|null) $data
+     * @return (int|null)
+     */
+    protected function extractOldId($data)
+    {
+        if (!is_array($data)) {
+            return null;
+        }
+        if (isset($data['ID'])) {
+            return $data['ID'];
+        }
+        if (isset($data['post_id'])) {
+            return $data['post_id'];
+        }
+        if (isset($data['import_id'])) {
+            return $data['import_id'];
+        }
+        return null;
+    }
+
     public function addMediaFile($file, $data = null)
     {
         $url = '';
         if (parse_url($file, PHP_URL_SCHEME)) {
             $url = $file;
+            $old_id = $this->extractOldId($data);
 
             // ① 同じURLのメディアが既に存在する場合はそのIDを返す（重複ダウンロード防止）
             $existing_id = attachment_url_to_postid($url);
             if ($existing_id) {
-                $old_id = null;
-                if (is_array($data)) {
-                    if (isset($data['ID'])) {
-                        $old_id = $data['ID'];
-                    } elseif (isset($data['post_id'])) {
-                        $old_id = $data['post_id'];
-                    } elseif (isset($data['import_id'])) {
-                        $old_id = $data['import_id'];
-                    }
-                }
                 if ($old_id) {
                     update_post_meta($existing_id, '_really_simple_csv_importer_old_id', $old_id);
                 }
                 return $existing_id;
+            }
+
+            // ①b 過去に同じURLからダウンロード済みのメディアを _source_url メタから検索（再インポート時の重複防止）
+            global $wpdb;
+            $existing_id = $wpdb->get_var($wpdb->prepare("
+                SELECT post_id
+                FROM $wpdb->postmeta
+                WHERE meta_key = '_source_url' AND meta_value = %s
+                LIMIT 1
+            ", $url));
+            if ($existing_id && $this->attachmentFileExists($existing_id)) {
+                if ($old_id) {
+                    update_post_meta($existing_id, '_really_simple_csv_importer_old_id', $old_id);
+                }
+                return (int) $existing_id;
             }
 
             // ② リモートからダウンロード
@@ -739,16 +773,6 @@ class AJCI_Import_Post_Helper
                     ));
                     if ($query->have_posts()) {
                         $found_id = $query->posts[0]->ID;
-                        $old_id = null;
-                        if (is_array($data)) {
-                            if (isset($data['ID'])) {
-                                $old_id = $data['ID'];
-                            } elseif (isset($data['post_id'])) {
-                                $old_id = $data['post_id'];
-                            } elseif (isset($data['import_id'])) {
-                                $old_id = $data['import_id'];
-                            }
-                        }
                         if ($old_id) {
                             update_post_meta($found_id, '_really_simple_csv_importer_old_id', $old_id);
                         }
@@ -763,16 +787,7 @@ class AJCI_Import_Post_Helper
             if ($url) {
                 update_post_meta($id, '_source_url', $url);
             }
-            $old_id = null;
-            if (is_array($data)) {
-                if (isset($data['ID'])) {
-                    $old_id = $data['ID'];
-                } elseif (isset($data['post_id'])) {
-                    $old_id = $data['post_id'];
-                } elseif (isset($data['import_id'])) {
-                    $old_id = $data['import_id'];
-                }
-            }
+            $old_id = $this->extractOldId($data);
             if ($old_id) {
                 update_post_meta($id, '_really_simple_csv_importer_old_id', $old_id);
             }
@@ -781,7 +796,7 @@ class AJCI_Import_Post_Helper
 
         return false;
     }
-    
+
     /**
      * Add attachment file and set as thumbnail. Automatically get remote file
      *
@@ -792,18 +807,16 @@ class AJCI_Import_Post_Helper
     {
         $post = $this->getPost();
         if ($post instanceof WP_Post) {
-            if (parse_url($file, PHP_URL_SCHEME)) {
-                $file = $this->remoteGet($file);
-            }
-            $thumbnail_id = $this->setAttachment($file);
-            if ($thumbnail_id) {
+            // addMediaFile 経由にすることでURL重複チェック（既存メディアの再利用）を効かせる
+            $thumbnail_id = $this->addMediaFile($file);
+            if ($thumbnail_id && !is_wp_error($thumbnail_id)) {
                 $meta_id = set_post_thumbnail($post, $thumbnail_id);
                 if ($meta_id) {
                     return true;
                 }
             }
         }
-        
+
         return false;
     }
     
@@ -838,6 +851,10 @@ class AJCI_Import_Post_Helper
                 'post_status'       => 'inherit'
             ), $data);
             $attachment_id          = wp_insert_attachment($attachment, $file, ($post instanceof WP_Post) ? $post->ID : null);
+            // 挿入失敗（WP_Error または 0）の場合は 0 を返す
+            if (!$attachment_id || is_wp_error($attachment_id)) {
+                return 0;
+            }
             $attachment_metadata    = wp_generate_attachment_metadata( $attachment_id, $file );
             wp_update_attachment_metadata($attachment_id, $attachment_metadata);
             return $attachment_id;
@@ -993,165 +1010,369 @@ class AJCI_Import_Post_Helper
     }
 
     /**
-     * 旧画像IDから新画像IDを解決する。見つからない場合は移行元サーバーからダウンロードを試みる
-     * 
+     * 移行元のWordPressベースURL候補をすべて取得する
+     * ユーザー指定 → _source_url メタ由来 → guid 由来 の優先順で重複なしのリストを返す
+     *
+     * @return array ベースURLの配列（末尾スラッシュなし）
+     */
+    public function getImportOriginCandidates()
+    {
+        static $cache = null;
+        if ($cache !== null) {
+            return $cache;
+        }
+
+        $candidates = array();
+
+        // 1. ユーザー指定URL（最優先・パス込み）
+        if (!empty(self::$import_origin_url)) {
+            $candidates[] = rtrim(self::$import_origin_url, '/');
+        }
+
+        global $wpdb;
+
+        // 2. _source_url メタ由来のベースURL（過去のインポートで記録された移行元）
+        $source_urls = $wpdb->get_col("
+            SELECT DISTINCT meta_value
+            FROM $wpdb->postmeta
+            WHERE meta_key = '_source_url' AND meta_value LIKE 'http%'
+            LIMIT 10
+        ");
+        foreach ((array) $source_urls as $u) {
+            $pos = strpos($u, '/wp-content/uploads/');
+            if ($pos !== false) {
+                $base = rtrim(substr($u, 0, $pos), '/');
+                if (!in_array($base, $candidates, true)) {
+                    $candidates[] = $base;
+                }
+            }
+        }
+
+        // 3. guid 由来（現在のホストとは異なるアタッチメントguid）
+        $current_host = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : parse_url(home_url(), PHP_URL_HOST);
+        if ($current_host) {
+            $guid_urls = $wpdb->get_col($wpdb->prepare("
+                SELECT DISTINCT guid
+                FROM $wpdb->posts
+                WHERE post_type = 'attachment' AND guid LIKE 'http%' AND guid NOT LIKE %s
+                LIMIT 10
+            ", '%' . $wpdb->esc_like($current_host) . '%'));
+            foreach ((array) $guid_urls as $u) {
+                $pos = strpos($u, '/wp-content/uploads/');
+                if ($pos !== false) {
+                    $base = rtrim(substr($u, 0, $pos), '/');
+                    if (!in_array($base, $candidates, true)) {
+                        $candidates[] = $base;
+                    }
+                }
+            }
+        }
+
+        $cache = $candidates;
+        return $candidates;
+    }
+
+    /**
+     * 壊れたアタッチメント（投稿はあるが実ファイルがない）を指定URLから再ダウンロードして修復する
+     *
+     * @param int    $attachment_id 修復対象のアタッチメントID
+     * @param string $url           ダウンロード元URL
+     * @return bool 修復に成功したら true
+     */
+    public function repairAttachment($attachment_id, $url)
+    {
+        $file = $this->remoteGet($url);
+        if (!$file || !file_exists($file)) {
+            return false;
+        }
+
+        // 実ファイルをアタッチメントに紐付け直す
+        update_attached_file($attachment_id, $file);
+
+        // MIMEタイプを補正
+        $filetype = wp_check_filetype(basename($file));
+        if (!empty($filetype['type'])) {
+            wp_update_post(array(
+                'ID'             => $attachment_id,
+                'post_mime_type' => $filetype['type'],
+            ));
+        }
+
+        // サムネイル等のメタデータを生成
+        $metadata = wp_generate_attachment_metadata($attachment_id, $file);
+        if (!is_wp_error($metadata) && $metadata) {
+            wp_update_attachment_metadata($attachment_id, $metadata);
+        }
+        update_post_meta($attachment_id, '_source_url', $url);
+
+        return true;
+    }
+
+    /**
+     * 移行元サーバーから旧IDに対応する画像ファイルURLを取得する（REST API → HTMLスクレイピング）
+     *
+     * @param int    $old_id        旧サーバーの画像ID
+     * @param string $origin_domain 移行元ベースURL
+     * @return string 画像ファイルURL。見つからない場合は空文字
+     */
+    public function findRemoteSourceUrl($old_id, $origin_domain)
+    {
+        // REST API無効が判明している移行元はスキップする（同一実行内のキャッシュ）
+        static $rest_disabled = array();
+
+        $args = array('timeout' => 15);
+
+        // Basic 認証情報の付与
+        $user = self::$basic_auth_user;
+        $pass = self::$basic_auth_pass;
+        if (!empty($user) && !empty($pass)) {
+            $args['headers'] = array(
+                'Authorization' => 'Basic ' . base64_encode($user . ':' . $pass)
+            );
+        }
+
+        // 1. REST API
+        if (empty($rest_disabled[$origin_domain])) {
+            $api_url = rtrim($origin_domain, '/') . '/wp-json/wp/v2/media/' . (int) $old_id;
+            $response = wp_safe_remote_get($api_url, $args);
+            if (is_wp_error($response)) {
+                $response = wp_remote_get($api_url, $args);
+            }
+            if (!is_wp_error($response)) {
+                $code = wp_remote_retrieve_response_code($response);
+                if ($code === 200) {
+                    $body = json_decode(wp_remote_retrieve_body($response), true);
+                    if (is_array($body) && isset($body['source_url'])) {
+                        return $body['source_url'];
+                    }
+                } elseif ($code === 401 || $code === 403) {
+                    // REST API自体が無効化されている場合は以降このオリジンへのREST問い合わせを省略
+                    $body = wp_remote_retrieve_body($response);
+                    if (strpos($body, 'rest_disabled') !== false || strpos($body, 'rest_forbidden') !== false) {
+                        $rest_disabled[$origin_domain] = true;
+                    }
+                }
+            }
+        }
+
+        // 2. アタッチメントページのHTMLスクレイピング（REST API無効時のフォールバック）
+        $html_url = rtrim($origin_domain, '/') . '/?attachment_id=' . (int) $old_id;
+        $args['redirection'] = 10;
+        $html_response = wp_remote_get($html_url, $args);
+        if (!is_wp_error($html_response) && wp_remote_retrieve_response_code($html_response) === 200) {
+            $html_body = wp_remote_retrieve_body($html_response);
+            // 2a. 標準テンプレートのアタッチメント表示 <p class="attachment"><a href="(画像URL)">
+            if (preg_match('/<p class="attachment"><a href=[\'\"]([^\'\"]+)[\'\"]/i', $html_body, $matches)) {
+                return $matches[1];
+            }
+            // 2b. og:image メタタグ（uploads配下のURLのみ採用）
+            if (preg_match('/property=[\'\"]og:image[\'\"] content=[\'\"]([^\'\"]+wp-content\/uploads\/[^\'\"]+)[\'\"]/i', $html_body, $matches)) {
+                return $matches[1];
+            }
+            // 2c. フォールバック: アタッチメントページと判別できる場合のみ、uploads配下へのリンクを採用
+            // （トップページ等へのリダイレクト先で無関係な画像を拾わないようガード）
+            if (strpos($html_body, 'attachment') !== false
+                && preg_match('/href=[\'\"]([^\'\"]+wp-content\/uploads\/[^\'\"]+\.(jpg|jpeg|png|gif|webp|pdf|zip))[\'\"]/i', $html_body, $matches)) {
+                return $matches[1];
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * 同一サーバー上の移行元WordPressからファイルを直接コピーしてアタッチメント登録する
+     *
+     * @param int    $old_id        旧サーバーの画像ID
+     * @param string $origin_domain 移行元ベースURL
+     * @return int 新しいアタッチメントID。失敗時は0
+     */
+    public function resolveViaLocalCopy($old_id, $origin_domain)
+    {
+        $local_wp_path = $this->resolveLocalWpPath($origin_domain);
+        if (!$local_wp_path) {
+            return 0;
+        }
+        $local_conn = $this->getSourceDbConnection($local_wp_path);
+        if (!$local_conn) {
+            return 0;
+        }
+
+        // 移行元DBから _wp_attached_file と post_title を取得
+        $config_content = file_get_contents($local_wp_path . '/wp-config.php');
+        preg_match("/\\\$table_prefix\s*=\s*'([^']+)'/i", $config_content, $m_prefix);
+        $prefix = isset($m_prefix[1]) ? $m_prefix[1] : 'wp_';
+
+        $q_file = mysqli_query($local_conn, "SELECT meta_value FROM {$prefix}postmeta WHERE post_id = " . (int)$old_id . " AND meta_key = '_wp_attached_file' LIMIT 1");
+        $row_file = $q_file ? mysqli_fetch_assoc($q_file) : null;
+        $attached_file = isset($row_file['meta_value']) ? $row_file['meta_value'] : '';
+
+        $q_post = mysqli_query($local_conn, "SELECT post_title, post_content, post_mime_type FROM {$prefix}posts WHERE ID = " . (int)$old_id . " LIMIT 1");
+        $row_post = $q_post ? mysqli_fetch_assoc($q_post) : null;
+
+        mysqli_close($local_conn);
+
+        if (!$attached_file || !$row_post) {
+            return 0;
+        }
+
+        $source_file_path = rtrim($local_wp_path, '/') . '/wp-content/uploads/' . $attached_file;
+        if (!file_exists($source_file_path)) {
+            return 0;
+        }
+
+        // 移行先のアップロードディレクトリへコピー
+        $wp_uploads = wp_upload_dir();
+        $dest_file_name = basename($source_file_path);
+        $dest_sub_dir = dirname($attached_file);
+
+        $dest_dir = $wp_uploads['basedir'] . '/' . $dest_sub_dir;
+        if (!file_exists($dest_dir)) {
+            wp_mkdir_p($dest_dir);
+        }
+
+        $dest_file_path = $dest_dir . '/' . wp_unique_filename($dest_dir, $dest_file_name);
+        if (!copy($source_file_path, $dest_file_path)) {
+            return 0;
+        }
+
+        // アタッチメントを挿入
+        $attachment_data = array(
+            'post_mime_type' => $row_post['post_mime_type'],
+            'guid'           => $wp_uploads['baseurl'] . '/' . $dest_sub_dir . '/' . basename($dest_file_path),
+            'post_title'     => $row_post['post_title'],
+            'post_content'   => $row_post['post_content'],
+            'post_status'    => 'inherit'
+        );
+        $attachment_id = wp_insert_attachment($attachment_data, $dest_file_path);
+        if (!$attachment_id || is_wp_error($attachment_id)) {
+            return 0;
+        }
+
+        $attachment_metadata = wp_generate_attachment_metadata($attachment_id, $dest_file_path);
+        wp_update_attachment_metadata($attachment_id, $attachment_metadata);
+
+        // 移行元URLと旧IDをメタデータとして保存
+        update_post_meta($attachment_id, '_really_simple_csv_importer_old_id', $old_id);
+        $source_url = rtrim($origin_domain, '/') . '/wp-content/uploads/' . $attached_file;
+        update_post_meta($attachment_id, '_source_url', $source_url);
+
+        return $attachment_id;
+    }
+
+    /**
+     * 旧画像IDから新画像IDを解決する。
+     * 解決チェーン: マッピング → 同一ID健全チェック → 壊れたアタッチメントの修復 → 各移行元候補からの取得
+     *
      * @param int|string $old_id 旧サーバーの画像ID
      * @return int 新しいアタッチメントID。失敗時は0
      */
     public function resolveImageId($old_id)
     {
+        // 同一実行内の解決結果キャッシュ（成功・失敗とも記憶し、重複した問い合わせを防ぐ）
+        static $resolved_cache = array();
+
         if (empty($old_id) || !is_numeric($old_id)) {
             return 0;
         }
+        $old_id = (int) $old_id;
 
-        // 0. 同一サイトまたは同一IDでインポートした場合: 同じIDのアタッチメントがすでにあればそのまま使用
-        $local = get_post((int) $old_id);
-        if ($local && $local->post_type === 'attachment' && $local->post_status === 'inherit') {
-            return (int) $old_id;
+        if (isset($resolved_cache[$old_id])) {
+            return $resolved_cache[$old_id];
         }
 
         global $wpdb;
 
         // 1. すでにインポート済みのマッピングテーブルから検索
         $new_id = $wpdb->get_var($wpdb->prepare("
-            SELECT post_id 
-            FROM $wpdb->postmeta 
-            WHERE meta_key = '_really_simple_csv_importer_old_id' AND meta_value = %s 
+            SELECT post_id
+            FROM $wpdb->postmeta
+            WHERE meta_key = '_really_simple_csv_importer_old_id' AND meta_value = %s
             LIMIT 1
         ", $old_id));
 
         if ($new_id) {
-            return (int) $new_id;
+            $new_id = (int) $new_id;
+            // マッピング先が健全（実ファイルあり）か確認してから採用する
+            if ($this->attachmentFileExists($new_id)) {
+                $resolved_cache[$old_id] = $new_id;
+                return $new_id;
+            }
+            // 壊れている場合は _source_url から修復を試みる
+            $src = get_post_meta($new_id, '_source_url', true);
+            if ($src && filter_var($src, FILTER_VALIDATE_URL) && $this->repairAttachment($new_id, $src)) {
+                $resolved_cache[$old_id] = $new_id;
+                return $new_id;
+            }
+            // 修復失敗時は以降の解決チェーンへ進む
         }
 
-        // 2. マッピングがなく、かつ移行元が同じサーバー上に物理的に存在する場合、ファイルを直接コピーしてアタッチメント登録を試みる
-        $origin_domain = $this->getImportOriginDomain();
-        if ($origin_domain) {
-            $local_wp_path = $this->resolveLocalWpPath($origin_domain);
-            if ($local_wp_path) {
-                $local_conn = $this->getSourceDbConnection($local_wp_path);
-                if ($local_conn) {
-                    // 移行元DBから _wp_attached_file と post_title を取得
-                    $config_content = file_get_contents($local_wp_path . '/wp-config.php');
-                    preg_match("/\\\$table_prefix\s*=\s*'([^']+)'/i", $config_content, $m_prefix);
-                    $prefix = isset($m_prefix[1]) ? $m_prefix[1] : 'wp_';
-                    
-                    $q_file = mysqli_query($local_conn, "SELECT meta_value FROM {$prefix}postmeta WHERE post_id = " . (int)$old_id . " AND meta_key = '_wp_attached_file' LIMIT 1");
-                    $row_file = mysqli_fetch_assoc($q_file);
-                    $attached_file = isset($row_file['meta_value']) ? $row_file['meta_value'] : '';
-                    
-                    $q_post = mysqli_query($local_conn, "SELECT post_title, post_content, post_mime_type FROM {$prefix}posts WHERE ID = " . (int)$old_id . " LIMIT 1");
-                    $row_post = mysqli_fetch_assoc($q_post);
-                    
-                    mysqli_close($local_conn);
-                    
-                    if ($attached_file && $row_post) {
-                        $source_file_path = rtrim($local_wp_path, '/') . '/wp-content/uploads/' . $attached_file;
-                        if (file_exists($source_file_path)) {
-                            // 移行先のアップロードディレクトリを取得し、コピーする
-                            $wp_uploads = wp_upload_dir();
-                            $dest_file_name = basename($source_file_path);
-                            $dest_sub_dir = dirname($attached_file);
-                            
-                            $dest_dir = $wp_uploads['basedir'] . '/' . $dest_sub_dir;
-                            if (!file_exists($dest_dir)) {
-                                wp_mkdir_p($dest_dir);
-                            }
-                            
-                            $dest_file_path = $dest_dir . '/' . wp_unique_filename($dest_dir, $dest_file_name);
-                            if (copy($source_file_path, $dest_file_path)) {
-                                // アタッチメントを挿入
-                                $attachment_data = array(
-                                    'post_mime_type' => $row_post['post_mime_type'],
-                                    'guid'           => $wp_uploads['baseurl'] . '/' . $dest_sub_dir . '/' . basename($dest_file_path),
-                                    'post_title'     => $row_post['post_title'],
-                                    'post_content'   => $row_post['post_content'],
-                                    'post_status'    => 'inherit'
-                                );
-                                $attachment_id = wp_insert_attachment($attachment_data, $dest_file_path);
-                                if ($attachment_id) {
-                                    require_once(ABSPATH . 'wp-admin/includes/image.php');
-                                    $attachment_metadata = wp_generate_attachment_metadata($attachment_id, $dest_file_path);
-                                    wp_update_attachment_metadata($attachment_id, $attachment_metadata);
-                                    
-                                    // 移行元URLと旧IDをメタデータとして保存
-                                    update_post_meta($attachment_id, '_really_simple_csv_importer_old_id', $old_id);
-                                    // _source_url を作成
-                                    $source_url = rtrim($origin_domain, '/') . '/wp-content/uploads/' . $attached_file;
-                                    update_post_meta($attachment_id, '_source_url', $source_url);
-                                    
-                                    return $attachment_id;
-                                }
-                            }
-                        }
-                    }
+        // 2. 同一IDのローカルアタッチメントをチェック
+        $local = get_post($old_id);
+        $local_is_attachment = ($local && $local->post_type === 'attachment');
+        if ($local_is_attachment) {
+            // 2a. 健全（実ファイルがディスク上に存在）ならそのまま採用
+            if ($this->attachmentFileExists($old_id)) {
+                $resolved_cache[$old_id] = $old_id;
+                return $old_id;
+            }
+            // 2b. 壊れている（DBレコードのみ・ファイル欠損）場合: _source_url から再ダウンロードして修復
+            $src = get_post_meta($old_id, '_source_url', true);
+            if ($src && filter_var($src, FILTER_VALIDATE_URL)) {
+                if ($this->repairAttachment($old_id, $src)) {
+                    $resolved_cache[$old_id] = $old_id;
+                    return $old_id;
                 }
             }
+            // 修復失敗時は以降の解決チェーンへ進む
         }
 
-        // 3. マッピングがなく、ローカル解決もできない場合、移行元サーバーの REST API を叩いて画像URLを取得し、ダウンロードを試みる
-        if ($origin_domain) {
-            $source_url = '';
-            $api_url = $origin_domain . '/wp-json/wp/v2/media/' . (int)$old_id;
-            
-            $args = array(
-                'timeout' => 15,
-            );
-
-            // Basic 認証情報の付与
-            $user = self::$basic_auth_user;
-            $pass = self::$basic_auth_pass;
-            if (!empty($user) && !empty($pass)) {
-                $args['headers'] = array(
-                    'Authorization' => 'Basic ' . base64_encode($user . ':' . $pass)
-                );
-            }
-
-            $response = wp_safe_remote_get($api_url, $args);
-            if (is_wp_error($response)) {
-                $response = wp_remote_get($api_url, $args);
-            }
-
-            if (!is_wp_error($response) && wp_remote_retrieve_response_code($response) === 200) {
-                $body = json_decode(wp_remote_retrieve_body($response), true);
-                if (is_array($body) && isset($body['source_url'])) {
-                    $source_url = $body['source_url'];
+        // 3. 各移行元候補に対して解決を試みる
+        $candidates = $this->getImportOriginCandidates();
+        foreach ($candidates as $origin_domain) {
+            // 3a. 同一サーバー上の移行元からファイルを直接コピー
+            if (!$local_is_attachment) {
+                $copied_id = $this->resolveViaLocalCopy($old_id, $origin_domain);
+                if ($copied_id) {
+                    $resolved_cache[$old_id] = $copied_id;
+                    return $copied_id;
                 }
             }
 
-            // REST API が失敗した場合、または無効化されている場合、HTMLページからスクレイピングを試みる
-            if (empty($source_url)) {
-                $html_url = rtrim($origin_domain, '/') . '/?attachment_id=' . (int)$old_id;
-                // リダイレクトを確実に追跡するため、最初から wp_remote_get を使用する
-                $args['redirection'] = 10;
-                $html_response = wp_remote_get($html_url, $args);
-                if (!is_wp_error($html_response) && wp_remote_retrieve_response_code($html_response) === 200) {
-                    $html_body = wp_remote_retrieve_body($html_response);
-                    // 正規表現で画像URLを抽出
-                    // 1. <p class="attachment"><a href='...' または <p class="attachment"><a href="..."
-                    if (preg_match('/<p class="attachment"><a href=[\'\"]([^\'\"]+)[\'\"]/i', $html_body, $matches)) {
-                        $source_url = $matches[1];
-                    }
-                    // 2. フォールバック: href="...wp-content/uploads/..." へのリンク
-                    elseif (preg_match('/href=[\'\"]([^\'\"]+wp-content\/uploads\/[^\'\"]+)[\'\"]/i', $html_body, $matches)) {
-                        $source_url = $matches[1];
-                    }
-                }
-            }
-
+            // 3b. REST API → HTMLスクレイピングで画像URLを特定しダウンロード
+            $source_url = $this->findRemoteSourceUrl($old_id, $origin_domain);
             if ($source_url) {
-                // 旧IDを紐付け情報として渡すために $data を用意
-                $data = array(
-                    'ID' => (int) $old_id
-                );
-                $attachment_id = $this->addMediaFile($source_url, $data);
-                if ($attachment_id) {
-                    return $attachment_id;
+                if ($local_is_attachment) {
+                    // 同一IDの壊れたアタッチメントが存在する場合はその場で修復（ID維持）
+                    if ($this->repairAttachment($old_id, $source_url)) {
+                        $resolved_cache[$old_id] = $old_id;
+                        return $old_id;
+                    }
+                }
+                // import_id（推奨ID）として渡す: IDが空いていれば旧IDのまま新規作成される。
+                // ※ 'ID' を渡すと既存投稿の「更新」と解釈され、存在しないIDでは 0 が返り失敗するため不可
+                $attachment_id = $this->addMediaFile($source_url, array('import_id' => $old_id));
+                if ($attachment_id && !is_wp_error($attachment_id)) {
+                    $resolved_cache[$old_id] = (int) $attachment_id;
+                    return (int) $attachment_id;
                 }
             }
         }
 
+        $resolved_cache[$old_id] = 0;
         return 0;
+    }
+
+    /**
+     * アタッチメントが健全（実ファイルがディスク上に存在する）かを判定する
+     *
+     * @param int $attachment_id アタッチメントID
+     * @return bool
+     */
+    public function attachmentFileExists($attachment_id)
+    {
+        $file = get_attached_file($attachment_id);
+        return ($file && file_exists($file));
     }
 
     /**
@@ -1358,6 +1579,25 @@ class AJCI_Import_Post_Helper
 
         self::$field_key_map_cache[$cache_key] = $map;
         return $map;
+    }
+
+    /**
+     * 指定キーの「親グループ列」が同じデータセット内に存在するか判定する。
+     * エクスポーターは group 型の親列（JSON）と子のフラット列（{親}_{子}）を両方出力するため、
+     * 子列が解決できない場合でも、親列があればデータは親列経由で取り込まれる（=子列はスキップしてよい）。
+     *
+     * @param string $key      対象の列名
+     * @param array  $all_keys データセット内の全列名
+     * @return bool 親列が存在すれば true
+     */
+    public function hasParentColumn($key, $all_keys)
+    {
+        foreach ($all_keys as $other) {
+            if ($other !== $key && strpos($key, $other . '_') === 0) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
