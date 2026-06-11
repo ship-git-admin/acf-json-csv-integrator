@@ -5,7 +5,7 @@
  *
  * @package Really Simple CSV Importer
  */
-class RSCSV_Import_Post_Helper
+class AJCI_Import_Post_Helper
 {
     const CFS_PREFIX = 'cfs_';
     const SCF_PREFIX = 'scf_';
@@ -61,11 +61,11 @@ class RSCSV_Import_Post_Helper
      *
      * @param (int) $term_id Term ID
      * @param (string) $taxonomy Taxonomy slug
-     * @return (RSCSV_Import_Post_Helper)
+     * @return (AJCI_Import_Post_Helper)
      */
     public static function getTermByID($term_id, $taxonomy)
     {
-        $object = new RSCSV_Import_Post_Helper();
+        $object = new AJCI_Import_Post_Helper();
         $object->setTerm($term_id, $taxonomy);
         return $object;
     }
@@ -74,11 +74,11 @@ class RSCSV_Import_Post_Helper
      * Add a term
      *
      * @param (array) $data An associative array of the term data
-     * @return (RSCSV_Import_Post_Helper)
+     * @return (AJCI_Import_Post_Helper)
      */
     public static function addTerm($data)
     {
-        $object = new RSCSV_Import_Post_Helper();
+        $object = new AJCI_Import_Post_Helper();
         $taxonomy = isset($data['taxonomy']) ? $data['taxonomy'] : 'category';
         $name = isset($data['name']) ? $data['name'] : '';
 
@@ -282,11 +282,11 @@ class RSCSV_Import_Post_Helper
      * Get object by post id.
      *
      * @param (int) $post_id Post ID
-     * @return (RSCSV_Import_Post_Helper)
+     * @return (AJCI_Import_Post_Helper)
      */
     public static function getByID($post_id)
     {
-        $object = new RSCSV_Import_Post_Helper();
+        $object = new AJCI_Import_Post_Helper();
         $object->setPost($post_id);
         return $object;
     }
@@ -295,11 +295,11 @@ class RSCSV_Import_Post_Helper
      * Add a post
      *
      * @param (array) $data An associative array of the post data
-     * @return (RSCSV_Import_Post_Helper)
+     * @return (AJCI_Import_Post_Helper)
      */
     public static function add($data)
     {
-        $object = new RSCSV_Import_Post_Helper();
+        $object = new AJCI_Import_Post_Helper();
 
         if ($data['post_type'] == 'attachment') {
             $post_id = $object->addMediaFile($data['media_file'], $data);
@@ -411,7 +411,13 @@ class RSCSV_Import_Post_Helper
     }
     
     /**
-     public function processAcfArrayImages($array, $parent_type = '')
+     * ACFの配列構造から画像を再帰的に処理・ダウンロードし、アタッチメントIDに置換する。
+     *
+     * @param array  $array        ACFの配列データ
+     * @param string $parent_type  親フィールドタイプ
+     * @return array 処理後の配列データ
+     */
+    public function processAcfArrayImages($array, $parent_type = '')
     {
         if (!is_array($array)) {
             return $array;
@@ -485,25 +491,6 @@ class RSCSV_Import_Post_Helper
                             if ($attachment_id) {
                                 $array[$key] = $attachment_id;
                             }
-                        }
-                    }
-                }
-            }
-        }
-
-        return $array;
-    }
-                if ($is_image_field && filter_var($value, FILTER_VALIDATE_URL)) {
-                    $attachment_id = $this->addMediaFile($value);
-                    if ($attachment_id) {
-                        $array[$key] = $attachment_id;
-                    }
-                    // addMediaFile が失敗した場合でも URL のまま残すと ACF が誤動作するため
-                    // 既存メディアを URL で最終検索してIDに変換する
-                    if (!$attachment_id) {
-                        $found_id = attachment_url_to_postid($value);
-                        if ($found_id) {
-                            $array[$key] = $found_id;
                         }
                     }
                 }

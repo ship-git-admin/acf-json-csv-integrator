@@ -4,6 +4,11 @@ An integrated tool to export and import ACF (Advanced Custom Fields) flexible co
 
 ## Changelog
 
+### 1.0.20 (2026-06-11)
+- 改善: クラス名（`RSCSV_Import_Post_Helper` 等）およびファイル名を `AJCI_` 独自のものに一括リネーム（リファクタリング）。本家「Really Simple CSV Importer」などの他プラグインとの競合を完全に防ぎます。
+- 不具合修正: `class-rscsv_import_post_helper.php` の 413行目の `/**` の閉じ忘れ、および 496〜514行目のマージミスのゴミコードを削除。これにより、インポート処理時に Fatal Error が発生する問題を修正。
+- 改善: インポーター各モジュールの読み込み前に `opcache_invalidate` を呼び出し、OPcache のキャッシュが原因で古いクラスが読み込まれ続ける不具合を解消。
+
 ### 1.0.19 (2026-06-11)
 - 改善: 柔軟コンテンツ（Flexible Content）やリピーター等で、インポート時の update_field 呼び出しにフィールド名ではなくACFのフィールドキー（`field_xxx`）を自動逆引きして使用するように修正。これにより、ターム（カテゴリ）等で柔軟コンテンツデータが正常に保存されない不具合を解消。
 - 改善: プラグイン更新時、および強制アップデートチェック時（`?force_update_check=1`）に OPcache（PHP キャッシュ）を自動クリアする処理を追加。キャッシュが原因で発生する `Call to undefined method` などの不具合を防止。
