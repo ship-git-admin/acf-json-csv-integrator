@@ -410,7 +410,12 @@ class AJCI_CSV_Importer extends WP_Importer {
 									if ($field_key === $col_key && strpos($col_key, 'field_') !== 0) {
 										echo esc_html(sprintf('⚠️ 警告: フィールド "%s" のACFフィールドキー（field_xxx）を解決できませんでした。インポート先でACFフィールドグループが同期・有効化されているかご確認ください。<br>', $col_key));
 									}
-									update_field($field_key, $final_value, $options_page_id);
+									$result = update_field($field_key, $final_value, $options_page_id);
+									// update_field が false の場合はフォールバックとして update_option を試みる
+									if ($result === false) {
+										update_option($options_page_id . '_' . $col_key, $final_value);
+										echo esc_html(sprintf('⚠️ 警告: update_field("%s") が失敗したため update_option にフォールバックしました。フィールドグループが正しく登録・同期されているか確認してください。<br>', $col_key));
+									}
 								} else {
 									update_option($options_page_id . '_' . $col_key, $final_value);
 								}
