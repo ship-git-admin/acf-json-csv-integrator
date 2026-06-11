@@ -98,7 +98,7 @@ class AJCI_CSV_Importer extends WP_Importer {
 						<th scope="row"><label for="import_origin_url">移行元サイトURL (任意)</label></th>
 						<td>
 							<input type="text" id="import_origin_url" name="import_origin_url" class="regular-text" placeholder="例: https://example.com" />
-							<p class="description">画像IDから画像のダウンロードを試みる際、移行元サーバーのアドレスを指定します（未指定時はDBから自動検索します）。</p>
+							<p class="description">画像IDから画像のダウンロードを試みる際の移行元サーバーのアドレス。本プラグイン（v1.0.27以降）でエクスポートしたCSVには移行元URLが自動で埋め込まれているため、通常は未入力のままで構いません（入力した場合はそちらを優先します）。</p>
 						</td>
 					</tr>
 				</tbody>
@@ -345,10 +345,17 @@ class AJCI_CSV_Importer extends WP_Importer {
 
 		public function process_single_row($data, $h, $is_term_import, $is_options_import, $post_statuses) {
 				echo '<li>';
-				
+
 				$post = array();
 				$is_update = false;
 				$error = new WP_Error();
+
+				// CSVに埋め込まれた移行元サイトURL（_ajci_origin列）を抽出する。
+				// ユーザーがフォームで移行元URLを指定している場合はそちらを優先する。
+				$csv_origin = $h->get_data($this, $data, '_ajci_origin');
+				if ($csv_origin && class_exists('AJCI_Import_Post_Helper') && empty(AJCI_Import_Post_Helper::$import_origin_url)) {
+					AJCI_Import_Post_Helper::$import_origin_url = esc_url_raw($csv_origin);
+				}
 				
 				if ($is_options_import) {
 					$options_page_id = $h->get_data($this, $data, 'options_page_id');

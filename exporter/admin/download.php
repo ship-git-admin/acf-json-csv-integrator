@@ -105,6 +105,9 @@ if (
       //マージ用の配列
       $customs_array = array();
 
+      // 移行元サイトURL（インポート時の画像ID解決に自動利用される）
+      $customs_array += array('_ajci_origin' => home_url());
+
       /**
        * フィルター追加
        */

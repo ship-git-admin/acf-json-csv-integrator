@@ -52,6 +52,8 @@ if (
         $row = array();
 
         $row['taxonomy'] = $taxonomy;
+        // 移行元サイトURL（インポート時の画像ID解決に自動利用される）
+        $row['_ajci_origin'] = home_url();
 
         // 標準フィールド
         if (in_array('term_id', $term_fields))    $row['term_id']     = $term->term_id;

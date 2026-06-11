@@ -54,6 +54,8 @@ if (
     $row = array();
     // どのオプションページのデータかを識別できるよう先頭に付与
     $row['options_page_id'] = $post_id;
+    // 移行元サイトURL（インポート時の画像ID解決に自動利用される）
+    $row['_ajci_origin'] = home_url();
 
     foreach ($cf_fields as $field_name) {
       $field_value = '';

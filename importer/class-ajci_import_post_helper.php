@@ -164,6 +164,12 @@ class AJCI_Import_Post_Helper
                 $args['parent'] = 0;
                 $term_info = wp_update_term($term->term_id, $taxonomy, $args);
             }
+            // スラッグが他のタームで使用済みの場合、スラッグ以外（名前・説明・親）だけ更新する
+            if (is_wp_error($term_info) && $term_info->get_error_code() === 'duplicate_term_slug' && isset($args['slug'])) {
+                echo esc_html(sprintf('⚠️ 警告: スラッグ "%s" は他のタームで使用済みのため、既存スラッグ "%s" を維持して名前等のみ更新しました。<br>', $args['slug'], $term->slug));
+                unset($args['slug']);
+                $term_info = wp_update_term($term->term_id, $taxonomy, $args);
+            }
             if (is_wp_error($term_info)) {
                 $this->addError($term_info->get_error_code(), $term_info->get_error_message());
             } else {
