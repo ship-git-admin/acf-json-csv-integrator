@@ -4,7 +4,7 @@ Plugin Name: ACF JSON CSV Integrator
 Plugin URI: https://github.com/aurora-ship-sato/acf-json-csv-integrator
 Description: An integrated tool to export and import ACF (Advanced Custom Fields) flexible content and repeaters seamlessly as JSON-formatted strings via CSV.
 Author: Gemini
-Version: 1.0.18
+Version: 1.0.19
 License: GPLv2 or later
 Text Domain: acf-json-csv-integrator
 Update URI: false
@@ -34,6 +34,9 @@ if (file_exists(AJCI_PLUGIN_DIR . 'lib/plugin-update-checker/plugin-update-check
 
   // クエリパラメータ ?force_update_check=1 が指定された場合、キャッシュを強制クリアしてGitHubに再問い合わせする
   if (isset($_GET['force_update_check']) && is_admin()) {
+    if (function_exists('opcache_reset')) {
+      @opcache_reset();
+    }
     $myUpdateChecker->getUpdateState()->setLastCheckToZero();
     $result = $myUpdateChecker->checkForUpdates();
 
@@ -97,3 +100,10 @@ if (file_exists(AJCI_PLUGIN_DIR . 'exporter/wp-csv-exporter.php')) {
 if (file_exists(AJCI_PLUGIN_DIR . 'importer/rs-csv-importer.php')) {
   require_once AJCI_PLUGIN_DIR . 'importer/rs-csv-importer.php';
 }
+
+// アップデート完了時にOPcacheをクリア
+add_action('upgrader_process_complete', function($upgrader_object, $options) {
+  if (function_exists('opcache_reset')) {
+    @opcache_reset();
+  }
+}, 10, 2);

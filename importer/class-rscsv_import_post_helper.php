@@ -196,7 +196,8 @@ class RSCSV_Import_Post_Helper
                     }
                 } elseif ($is_json_array) {
                     $decoded_value = $this->processAcfArrayImages($decoded_value);
-                    update_field($key, $decoded_value, 'term_' . $term->term_id);
+                    $field_key = $this->getFieldKey($key);
+                    update_field($field_key, $decoded_value, 'term_' . $term->term_id);
                     $is_acf = 1;
                 }
             }
@@ -539,7 +540,8 @@ class RSCSV_Import_Post_Helper
         $post = $this->getPost();
         if ($post instanceof WP_Post) {
             if (function_exists('update_field')) {
-                update_field($key, $value, $post->ID);
+                $field_key = $this->getFieldKey($key);
+                update_field($field_key, $value, $post->ID);
             } else {
                 $this->updateMeta($key, $value);
             }
@@ -981,6 +983,26 @@ class RSCSV_Import_Post_Helper
         return 0;
     }
     
+    /**
+     * フィールド名（またはキー）からACFのフィールドキーを解決する
+     * 
+     * @param string $selector フィールド名またはフィールドキー
+     * @return string フィールドキー（解決できない場合は元の値）
+     */
+    public function getFieldKey($selector)
+    {
+        if (strpos($selector, 'field_') === 0) {
+            return $selector;
+        }
+        if (function_exists('acf_get_field')) {
+            $field = acf_get_field($selector);
+            if (is_array($field) && isset($field['key'])) {
+                return $field['key'];
+            }
+        }
+        return $selector;
+    }
+
     /**
      * Unset WP_Post object
      */
