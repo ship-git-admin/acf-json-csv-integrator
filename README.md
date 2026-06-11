@@ -4,6 +4,11 @@ An integrated tool to export and import ACF (Advanced Custom Fields) flexible co
 
 ## Changelog
 
+### 1.0.17 (2026-06-11)
+- タームインポート（`setTermMeta`）、投稿インポート（`setMeta`）において、単一画像/ファイルフィールドに画像ID（数値）が指定されている場合にも、画像を自動ダウンロード・アタッチメントID再紐付けするように修正。
+- ACFの配列データ（Flexible ContentやRepeaterなど）のネストされた配列内に含まれる画像ID（数値）についても、再紐付け・ID置換が適用されるように修正。
+- class-rscsv_import_post_helper.php 内の文字コード崩れ（非UTF-8文字）およびゴミコードをクリーンアップ。
+
 ### 1.0.16 (2026-06-11)
 - オプションページのCSVインポート時に、アタッチメントIDや画像URLを検知して画像を自動ダウンロードし、新アタッチメントIDへと再紐付け（置換）する処理を追加。
 - アタッチメントインポート時に、旧IDとインポート元URLをメタデータに保存し、再インポートや他のインポート時に紐付け可能にする。
