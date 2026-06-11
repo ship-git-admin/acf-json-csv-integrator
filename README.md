@@ -4,6 +4,9 @@ An integrated tool to export and import ACF (Advanced Custom Fields) flexible co
 
 ## Changelog
 
+### 1.0.18 (2026-06-11)
+- 不具合修正: Ajaxバッチ処理中に例外・エラーが発生した際、出力バッファにたまっていた `<li>` タグがJSONレスポンスの前に漏れ出てしまい、`SyntaxError` を引き起こす問題を修正（エラー発生時に出力バッファを強制クリアするように対策）。
+
 ### 1.0.17 (2026-06-11)
 - タームインポート（`setTermMeta`）、投稿インポート（`setMeta`）において、単一画像/ファイルフィールドに画像ID（数値）が指定されている場合にも、画像を自動ダウンロード・アタッチメントID再紐付けするように修正。
 - ACFの配列データ（Flexible ContentやRepeaterなど）のネストされた配列内に含まれる画像ID（数値）についても、再紐付け・ID置換が適用されるように修正。

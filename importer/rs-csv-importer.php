@@ -848,8 +848,14 @@ function rs_csv_import_chunk_handler() {
 		'log' => $log
 	));
 	} catch (Exception $e) {
+		if (ob_get_level() > 0) {
+			ob_end_clean();
+		}
 		wp_send_json_error('Error: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
 	} catch (Error $e) {
+		if (ob_get_level() > 0) {
+			ob_end_clean();
+		}
 		wp_send_json_error('Fatal Error: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
 	} finally {
 		restore_error_handler();
