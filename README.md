@@ -4,6 +4,9 @@ An integrated tool to export and import ACF (Advanced Custom Fields) flexible co
 
 ## Changelog
 
+### 1.0.15 (2026-06-11)
+- 自動更新エラーの検証用デバッグ出力機能を追加（クエリパラメータ `?force_update_check=1` 指定時にWordPress管理画面の上部へ詳細情報を出力）。
+
 ### 1.0.14 (2026-06-11)
 - キャッシュ回避のためのバージョンアップ
 - キャッシュを強制バイパスするクエリパラメータ `?force_update_check=1` ハンドラーの実装。
