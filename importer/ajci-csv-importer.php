@@ -94,6 +94,13 @@ class AJCI_CSV_Importer extends WP_Importer {
 							<input type="password" id="basic_auth_pass" name="basic_auth_pass" class="regular-text" placeholder="" />
 						</td>
 					</tr>
+					<tr>
+						<th scope="row"><label for="import_origin_url">移行元サイトURL (任意)</label></th>
+						<td>
+							<input type="text" id="import_origin_url" name="import_origin_url" class="regular-text" placeholder="例: https://example.com" />
+							<p class="description">画像IDから画像のダウンロードを試みる際、移行元サーバーのアドレスを指定します（未指定時はDBから自動検索します）。</p>
+						</td>
+					</tr>
 				</tbody>
 			</table>
 			<?php submit_button( __( 'Upload file and import' ) ); ?>
@@ -119,15 +126,16 @@ class AJCI_CSV_Importer extends WP_Importer {
 		$this->id = (int) $file['id'];
 		$this->file = get_attached_file($this->id);
 
-		// フォームから渡されたBasic認証情報を一時保存
+		// フォームから渡されたBasic認証情報と移行元URLを一時保存
 		$basic_auth_user = isset($_POST['basic_auth_user']) ? sanitize_text_field($_POST['basic_auth_user']) : '';
 		$basic_auth_pass = isset($_POST['basic_auth_pass']) ? sanitize_text_field($_POST['basic_auth_pass']) : '';
+		$import_origin_url = isset($_POST['import_origin_url']) ? esc_url_raw($_POST['import_origin_url']) : '';
 
 		// AJAXバッチ処理用のUIとJSを出力する
-		$this->render_batch_ui($this->id, $basic_auth_user, $basic_auth_pass);
+		$this->render_batch_ui($this->id, $basic_auth_user, $basic_auth_pass, $import_origin_url);
 	}
 
-	function render_batch_ui($attachment_id, $basic_auth_user, $basic_auth_pass) {
+	function render_batch_ui($attachment_id, $basic_auth_user, $basic_auth_pass, $import_origin_url = '') {
 		// Count total lines in CSV
 		$h = new AJCI_CSV_Helper;
 		$handle = $h->fopen($this->file, 'r');
@@ -156,6 +164,7 @@ class AJCI_CSV_Importer extends WP_Importer {
 			var total_rows = <?php echo (int) $total_data_rows; ?>;
 			var basic_auth_user = <?php echo json_encode($basic_auth_user); ?>;
 			var basic_auth_pass = <?php echo json_encode($basic_auth_pass); ?>;
+			var import_origin_url = <?php echo json_encode($import_origin_url); ?>;
 			var processed = 0;
 			var offset = 1; // Start after header
 			var limit = 5; // Rows per batch
@@ -181,7 +190,8 @@ class AJCI_CSV_Importer extends WP_Importer {
 						offset: offset,
 						limit: limit,
 						basic_auth_user: basic_auth_user,
-						basic_auth_pass: basic_auth_pass
+						basic_auth_pass: basic_auth_pass,
+						import_origin_url: import_origin_url
 					},
 					dataType: 'json',
 					success: function(response) {
@@ -397,6 +407,9 @@ class AJCI_CSV_Importer extends WP_Importer {
 								// ACFの update_field が使えるなら使い、そうでなければ update_option を使う
 								if (function_exists('update_field')) {
 									$field_key = $helper->getFieldKey($col_key);
+									if ($field_key === $col_key && strpos($col_key, 'field_') !== 0) {
+										echo esc_html(sprintf('⚠️ 警告: フィールド "%s" のACFフィールドキー（field_xxx）を解決できませんでした。インポート先でACFフィールドグループが同期・有効化されているかご確認ください。<br>', $col_key));
+									}
 									update_field($field_key, $final_value, $options_page_id);
 								} else {
 									update_option($options_page_id . '_' . $col_key, $final_value);
@@ -795,6 +808,7 @@ function ajci_csv_import_chunk_handler() {
 	$limit = isset($_POST['limit']) ? (int) $_POST['limit'] : 5;
 	$basic_auth_user = isset($_POST['basic_auth_user']) ? sanitize_text_field($_POST['basic_auth_user']) : '';
 	$basic_auth_pass = isset($_POST['basic_auth_pass']) ? sanitize_text_field($_POST['basic_auth_pass']) : '';
+	$import_origin_url = isset($_POST['import_origin_url']) ? esc_url_raw($_POST['import_origin_url']) : '';
 
 	if (!$attachment_id) wp_send_json_error('No attachment ID');
 
@@ -806,6 +820,7 @@ function ajci_csv_import_chunk_handler() {
 	if (class_exists('AJCI_Import_Post_Helper')) {
 		AJCI_Import_Post_Helper::$basic_auth_user = $basic_auth_user;
 		AJCI_Import_Post_Helper::$basic_auth_pass = $basic_auth_pass;
+		AJCI_Import_Post_Helper::$import_origin_url = $import_origin_url;
 		
 		// デバッグ: processAcfArrayImages の定義チェックとファイルパス特定
 		if (!method_exists('AJCI_Import_Post_Helper', 'processAcfArrayImages')) {
