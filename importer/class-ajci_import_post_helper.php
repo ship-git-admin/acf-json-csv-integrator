@@ -26,6 +26,11 @@ class AJCI_Import_Post_Helper
     public static $import_origin_url;
 
     /**
+     * @var array フィールド名→フィールドキーのマップキャッシュ（コンテキスト別）
+     */
+    private static $field_key_map_cache = array();
+
+    /**
      * @var $post WP_Post object
      */
     private $post;
@@ -200,16 +205,19 @@ class AJCI_Import_Post_Helper
                         $is_acf = 1;
                     }
                 } elseif ($is_json_array) {
+                    // 配列内の画像をローカルIDに置換
                     $decoded_value = $this->processAcfArrayImages($decoded_value);
-                    $field_key = $this->getFieldKey($key);
-                    if ($field_key === $key && strpos($key, 'field_') !== 0) {
-                        echo esc_html(sprintf('⚠️ 警告: フィールド "%s" のACFフィールドキー（field_xxx）を解決できませんでした。インポート先でACFフィールドグループが同期・有効化されているかご確認ください。<br>', $key));
-                    }
-                    $result = update_field($field_key, $decoded_value, 'term_' . $term->term_id);
-                    // update_field が false を返した場合（フィールドが見つからない等）は直接メタとして保存
-                    if ($result === false) {
-                        update_term_meta($term->term_id, $key, $decoded_value);
-                        echo esc_html(sprintf('⚠️ 警告: update_field("%s") が失敗しました。フィールドグループが正しく登録・同期されているか確認してください。<br>', $key));
+                    // タクソノミーをコンテキストとしてフィールドキーを解決
+                    $field_key = $this->getFieldKey($key, array('taxonomy' => $term->taxonomy));
+
+                    if (strpos($field_key, 'field_') === 0) {
+                        // 正しいフィールドキーで update_field を実行（柔軟コンテンツ・リピーターを正しく保存）
+                        // ※ update_field は値が不変の場合も false を返すため、戻り値は失敗判定に使わない
+                        update_field($field_key, $decoded_value, 'term_' . $term->term_id);
+                    } else {
+                        // キーが解決できない配列値を生のまま term_meta に書くとACFのデータ構造を破壊する。
+                        // データ破損を避けるためスキップし、原因（フィールドグループ未同期）を通知する。
+                        echo esc_html(sprintf('⚠️ 警告: フィールド "%s" のACFフィールドキーを解決できなかったため、データ破損を避けてスキップしました。インポート先でACFフィールドグループが同期・有効化されているかご確認ください。<br>', $key));
                     }
                     $is_acf = 1;
                 }
@@ -411,7 +419,14 @@ class AJCI_Import_Post_Helper
                     } elseif ($is_json_array) {
                         // 配列内の画像URLを自動でダウンロードしてメディア登録しIDに置換
                         $decoded_value = $this->processAcfArrayImages($decoded_value);
-                        $this->acfUpdateField($key, $decoded_value);
+                        $field_key = $this->getFieldKey($key);
+                        if (strpos($field_key, 'field_') === 0) {
+                            // 正しいフィールドキーで保存（柔軟コンテンツ・リピーターを正しく格納）
+                            $this->acfUpdateField($field_key, $decoded_value);
+                        } else {
+                            // キー未解決の配列値を生メタに書くとACF構造を破壊するためスキップして通知
+                            echo esc_html(sprintf('⚠️ 警告: フィールド "%s" のACFフィールドキーを解決できなかったため、データ破損を避けてスキップしました。インポート先でACFフィールドグループが同期・有効化されているかご確認ください。<br>', $key));
+                        }
                         $is_acf = 1;
                     }
                 }
@@ -1014,22 +1029,110 @@ class AJCI_Import_Post_Helper
     
     /**
      * フィールド名（またはキー）からACFのフィールドキーを解決する
-     * 
+     *
      * @param string $selector フィールド名またはフィールドキー
+     * @param array  $context  解決の手掛かり array('options_page'=>id) / array('taxonomy'=>slug)
      * @return string フィールドキー（解決できない場合は元の値）
      */
-    public function getFieldKey($selector)
+    public function getFieldKey($selector, $context = array())
     {
+        // すでにフィールドキー形式（field_xxxxx）ならそのまま返す
         if (strpos($selector, 'field_') === 0) {
             return $selector;
         }
+
+        // 1. ACF標準APIで名前から取得を試みる（環境によっては名前解決が効く）
         if (function_exists('acf_get_field')) {
             $field = acf_get_field($selector);
-            if (is_array($field) && isset($field['key'])) {
+            if (is_array($field) && isset($field['key']) && strpos($field['key'], 'field_') === 0) {
                 return $field['key'];
             }
         }
+
+        // 2. フィールドグループを走査してフィールド名→キーを解決（確実なフォールバック）
+        $map = $this->buildFieldKeyMap($context);
+        if (isset($map[$selector])) {
+            return $map[$selector];
+        }
+
         return $selector;
+    }
+
+    /**
+     * ACFフィールドグループを走査し、トップレベルのフィールド名→フィールドキーのマップを構築する。
+     * コンテキスト（オプションページ／タクソノミー）に一致するグループを優先採用し、同名衝突に強くする。
+     *
+     * @param array $context array('options_page'=>id, 'menu_slug'=>slug) または array('taxonomy'=>slug)
+     * @return array name => key のマップ
+     */
+    public function buildFieldKeyMap($context = array())
+    {
+        $cache_key = md5(serialize($context));
+        if (isset(self::$field_key_map_cache[$cache_key])) {
+            return self::$field_key_map_cache[$cache_key];
+        }
+
+        $map = array();
+        if (!function_exists('acf_get_field_groups') || !function_exists('acf_get_fields')) {
+            self::$field_key_map_cache[$cache_key] = $map;
+            return $map;
+        }
+
+        $groups = acf_get_field_groups();
+        if (!is_array($groups)) {
+            self::$field_key_map_cache[$cache_key] = $map;
+            return $map;
+        }
+
+        // コンテキスト一致グループと非一致グループに振り分ける
+        $matched_groups = array();
+        $other_groups   = array();
+        foreach ($groups as $group) {
+            $is_match = false;
+            if (!empty($context) && isset($group['location']) && is_array($group['location'])) {
+                foreach ($group['location'] as $location_group) {
+                    foreach ($location_group as $rule) {
+                        if (!isset($rule['operator']) || $rule['operator'] !== '==') {
+                            continue;
+                        }
+                        if (isset($context['options_page']) && $rule['param'] === 'options_page'
+                            && ($rule['value'] === $context['options_page']
+                                || (isset($context['menu_slug']) && $rule['value'] === $context['menu_slug']))) {
+                            $is_match = true;
+                            break 2;
+                        }
+                        if (isset($context['taxonomy']) && $rule['param'] === 'taxonomy'
+                            && $rule['value'] === $context['taxonomy']) {
+                            $is_match = true;
+                            break 2;
+                        }
+                    }
+                }
+            }
+            if ($is_match) {
+                $matched_groups[] = $group;
+            } else {
+                $other_groups[] = $group;
+            }
+        }
+
+        // 非一致グループを先に、一致グループを後に処理する。
+        // 同名フィールドがある場合は後勝ちとなり、コンテキスト一致グループのキーが優先される。
+        $ordered = array_merge($other_groups, $matched_groups);
+        foreach ($ordered as $group) {
+            $fields = acf_get_fields($group['key']);
+            if (!is_array($fields)) {
+                continue;
+            }
+            foreach ($fields as $field) {
+                if (isset($field['name'], $field['key']) && $field['name'] !== '') {
+                    $map[$field['name']] = $field['key'];
+                }
+            }
+        }
+
+        self::$field_key_map_cache[$cache_key] = $map;
+        return $map;
     }
 
     /**
