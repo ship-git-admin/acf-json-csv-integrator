@@ -406,15 +406,20 @@ class AJCI_CSV_Importer extends WP_Importer {
 
 								// ACFの update_field が使えるなら使い、そうでなければ update_option を使う
 								if (function_exists('update_field')) {
-									$field_key = $helper->getFieldKey($col_key);
-									if ($field_key === $col_key && strpos($col_key, 'field_') !== 0) {
-										echo esc_html(sprintf('⚠️ 警告: フィールド "%s" のACFフィールドキー（field_xxx）を解決できませんでした。インポート先でACFフィールドグループが同期・有効化されているかご確認ください。<br>', $col_key));
-									}
-									$result = update_field($field_key, $final_value, $options_page_id);
-									// update_field が false の場合はフォールバックとして update_option を試みる
-									if ($result === false) {
-										update_option($options_page_id . '_' . $col_key, $final_value);
-										echo esc_html(sprintf('⚠️ 警告: update_field("%s") が失敗したため update_option にフォールバックしました。フィールドグループが正しく登録・同期されているか確認してください。<br>', $col_key));
+									// オプションページIDをコンテキストとしてフィールドキーを解決
+									$field_key = $helper->getFieldKey($col_key, array('options_page' => $options_page_id));
+
+									if (strpos($field_key, 'field_') === 0) {
+										// 正しいフィールドキーで update_field を実行（柔軟コンテンツも正しく保存）
+										// ※ update_field は値が不変の場合も false を返すため、戻り値は失敗判定に使わない
+										update_field($field_key, $final_value, $options_page_id);
+									} elseif ($is_json_array) {
+										// キー未解決の配列値を update_option で生のまま書くとACFのデータ構造を破壊し
+										// 「Cannot access offset of type array」等の致命的エラーを引き起こすためスキップする
+										echo esc_html(sprintf('⚠️ 警告: フィールド "%s" のACFフィールドキーを解決できなかったため、データ破損を避けてスキップしました。インポート先でACFフィールドグループが同期・有効化されているかご確認ください。<br>', $col_key));
+									} else {
+										// スカラー値はACF構造を壊さないため update_field でそのまま保存する
+										update_field($field_key, $final_value, $options_page_id);
 									}
 								} else {
 									update_option($options_page_id . '_' . $col_key, $final_value);
