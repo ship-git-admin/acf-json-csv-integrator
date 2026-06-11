@@ -4,6 +4,10 @@ An integrated tool to export and import ACF (Advanced Custom Fields) flexible co
 
 ## Changelog
 
+### 1.0.16 (2026-06-11)
+- オプションページのCSVインポート時に、アタッチメントIDや画像URLを検知して画像を自動ダウンロードし、新アタッチメントIDへと再紐付け（置換）する処理を追加。
+- アタッチメントインポート時に、旧IDとインポート元URLをメタデータに保存し、再インポートや他のインポート時に紐付け可能にする。
+
 ### 1.0.15 (2026-06-11)
 - 自動更新エラーの検証用デバッグ出力機能を追加（クエリパラメータ `?force_update_check=1` 指定時にWordPress管理画面の上部へ詳細情報を出力）。
 
