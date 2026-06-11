@@ -205,7 +205,12 @@ class AJCI_Import_Post_Helper
                     if ($field_key === $key && strpos($key, 'field_') !== 0) {
                         echo esc_html(sprintf('⚠️ 警告: フィールド "%s" のACFフィールドキー（field_xxx）を解決できませんでした。インポート先でACFフィールドグループが同期・有効化されているかご確認ください。<br>', $key));
                     }
-                    update_field($field_key, $decoded_value, 'term_' . $term->term_id);
+                    $result = update_field($field_key, $decoded_value, 'term_' . $term->term_id);
+                    // update_field が false を返した場合（フィールドが見つからない等）は直接メタとして保存
+                    if ($result === false) {
+                        update_term_meta($term->term_id, $key, $decoded_value);
+                        echo esc_html(sprintf('⚠️ 警告: update_field("%s") が失敗しました。フィールドグループが正しく登録・同期されているか確認してください。<br>', $key));
+                    }
                     $is_acf = 1;
                 }
             }
@@ -453,6 +458,11 @@ class AJCI_Import_Post_Helper
             $current_type = '';
             if (function_exists('acf_get_field') && !is_numeric($key)) {
                 $field_info = acf_get_field($key);
+                // field_ 始まりのフィールド名はACFがキーとして検索するが実際には名前の場合があるため、
+                // キー検索に失敗した場合は名前検索にフォールバックする
+                if (!is_array($field_info) && strpos($key, 'field_') === 0 && function_exists('acf_get_field_by_name')) {
+                    $field_info = acf_get_field_by_name($key);
+                }
                 if (is_array($field_info) && isset($field_info['type'])) {
                     $current_type = $field_info['type'];
                 }
@@ -475,6 +485,9 @@ class AJCI_Import_Post_Helper
                     $new_id = $this->resolveImageId($value);
                     if ($new_id) {
                         $array[$key] = $new_id;
+                    } else {
+                        // 解決できなかった場合も整数型で保持する（ACFの型互換性を維持）
+                        $array[$key] = (int) $value;
                     }
                 }
                 // URLの場合
@@ -865,30 +878,33 @@ class AJCI_Import_Post_Helper
         return '';
     }
     /**
-     * 移行元ドメインをデータベース上の既存メディアから特定する
-     * 
-     * @return string ドメインURL（末尾スラッシュなし）
+     * 移行元のWordPressベースURLを特定する（サブディレクトリインストール対応）
+     *
+     * @return string ベースURL（末尾スラッシュなし）
      */
     public function getImportOriginDomain()
     {
+        // ユーザーが直接指定した場合はパスを含む完全なURLをそのまま使用する
+        // （サブディレクトリインストール例: https://example.com/wp/ にも対応）
         if (!empty(self::$import_origin_url)) {
-            $parsed = parse_url(self::$import_origin_url);
-            if (isset($parsed['scheme']) && isset($parsed['host'])) {
-                $port = isset($parsed['port']) ? ':' . $parsed['port'] : '';
-                return $parsed['scheme'] . '://' . $parsed['host'] . $port;
-            }
+            return rtrim(self::$import_origin_url, '/');
         }
 
         global $wpdb;
 
-        // 1. _source_url メタキーを持つアタッチメントを検索
+        // DBフォールバック: _source_url メタからWPベースURLを推定する
+        // wp-content/uploads/ のパスを手掛かりにサブディレクトリも正しく取得する
         $source_url = $wpdb->get_var("
-            SELECT meta_value 
-            FROM $wpdb->postmeta 
-            WHERE meta_key = '_source_url' AND meta_value LIKE 'http%' 
+            SELECT meta_value
+            FROM $wpdb->postmeta
+            WHERE meta_key = '_source_url' AND meta_value LIKE 'http%'
             LIMIT 1
         ");
         if ($source_url) {
+            $uploads_pos = strpos($source_url, '/wp-content/uploads/');
+            if ($uploads_pos !== false) {
+                return rtrim(substr($source_url, 0, $uploads_pos), '/');
+            }
             $parsed = parse_url($source_url);
             if (isset($parsed['scheme']) && isset($parsed['host'])) {
                 $port = isset($parsed['port']) ? ':' . $parsed['port'] : '';
@@ -896,16 +912,20 @@ class AJCI_Import_Post_Helper
             }
         }
 
-        // 2. なければ、現在のホスト名とは異なる guid を持つアタッチメントを検索
+        // DBフォールバック: 現在のホストとは異なる guid を持つアタッチメントを検索
         $current_host = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : '';
         if ($current_host) {
             $guid_url = $wpdb->get_var($wpdb->prepare("
-                SELECT guid 
-                FROM $wpdb->posts 
-                WHERE post_type = 'attachment' AND guid LIKE 'http%' AND guid NOT LIKE %s 
+                SELECT guid
+                FROM $wpdb->posts
+                WHERE post_type = 'attachment' AND guid LIKE 'http%' AND guid NOT LIKE %s
                 LIMIT 1
             ", '%' . $wpdb->esc_like($current_host) . '%'));
             if ($guid_url) {
+                $uploads_pos = strpos($guid_url, '/wp-content/uploads/');
+                if ($uploads_pos !== false) {
+                    return rtrim(substr($guid_url, 0, $uploads_pos), '/');
+                }
                 $parsed = parse_url($guid_url);
                 if (isset($parsed['scheme']) && isset($parsed['host'])) {
                     $port = isset($parsed['port']) ? ':' . $parsed['port'] : '';
@@ -927,6 +947,12 @@ class AJCI_Import_Post_Helper
     {
         if (empty($old_id) || !is_numeric($old_id)) {
             return 0;
+        }
+
+        // 0. 同一サイトまたは同一IDでインポートした場合: 同じIDのアタッチメントがすでにあればそのまま使用
+        $local = get_post((int) $old_id);
+        if ($local && $local->post_type === 'attachment' && $local->post_status === 'inherit') {
+            return (int) $old_id;
         }
 
         global $wpdb;
