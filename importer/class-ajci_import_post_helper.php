@@ -21,6 +21,11 @@ class AJCI_Import_Post_Helper
     public static $basic_auth_pass;
 
     /**
+     * @var string Import Origin URL (input from user)
+     */
+    public static $import_origin_url;
+
+    /**
      * @var $post WP_Post object
      */
     private $post;
@@ -197,6 +202,9 @@ class AJCI_Import_Post_Helper
                 } elseif ($is_json_array) {
                     $decoded_value = $this->processAcfArrayImages($decoded_value);
                     $field_key = $this->getFieldKey($key);
+                    if ($field_key === $key && strpos($key, 'field_') !== 0) {
+                        echo esc_html(sprintf('⚠️ 警告: フィールド "%s" のACFフィールドキー（field_xxx）を解決できませんでした。インポート先でACFフィールドグループが同期・有効化されているかご確認ください。<br>', $key));
+                    }
                     update_field($field_key, $decoded_value, 'term_' . $term->term_id);
                     $is_acf = 1;
                 }
@@ -863,6 +871,14 @@ class AJCI_Import_Post_Helper
      */
     public function getImportOriginDomain()
     {
+        if (!empty(self::$import_origin_url)) {
+            $parsed = parse_url(self::$import_origin_url);
+            if (isset($parsed['scheme']) && isset($parsed['host'])) {
+                $port = isset($parsed['port']) ? ':' . $parsed['port'] : '';
+                return $parsed['scheme'] . '://' . $parsed['host'] . $port;
+            }
+        }
+
         global $wpdb;
 
         // 1. _source_url メタキーを持つアタッチメントを検索
