@@ -4,6 +4,9 @@ An integrated tool to export and import ACF (Advanced Custom Fields) flexible co
 
 ## Changelog
 
+### 1.0.24 (2026-06-11)
+- 不具合修正: 1.0.22 以前のバージョンでの誤ったフォールバック処理により、すでにデータベースに書き込まれてしまった「柔軟コンテンツの破損データ」を安全にクリーンアップする機能を追加しました。URLに `?cleanup_acf_error=1` パラメータを付与してアクセスすることで、クリーンアップを実行し `Cannot access offset of type array` 致命的エラーを解消できます。
+
 ### 1.0.23 (2026-06-11)
 - 重大な不具合修正: 1.0.22 で追加した「`update_field` が `false` を返したら `update_option`/`update_term_meta` にフォールバックする」処理が、柔軟コンテンツのデータを破壊し `Cannot access offset of type array`（致命的エラー）を引き起こしていた問題を修正。`update_field` は値が不変の場合も `false` を返すため、戻り値で失敗判定してはいけないというのが原因でした。当該フォールバックを完全に削除しました。
 - 改善: フィールド名→フィールドキー（`field_xxx`）の逆引きを、`acf_get_field()` 頼みから「ACFフィールドグループ全体を走査して名前→キーのマップを構築する」確実な方式に強化（`buildFieldKeyMap`）。オプションページ／タクソノミーのコンテキストを優先し、同名フィールドの衝突にも対応。これにより柔軟コンテンツが正しく保存されない問題を解消。
