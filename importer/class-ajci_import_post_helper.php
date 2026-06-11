@@ -1,5 +1,13 @@
 <?php
 
+// 必要な管理画面用ファイルを読み込む
+if (defined('ABSPATH')) {
+    require_once ABSPATH . 'wp-admin/includes/taxonomy.php';
+    require_once ABSPATH . 'wp-admin/includes/image.php';
+    require_once ABSPATH . 'wp-admin/includes/file.php';
+    require_once ABSPATH . 'wp-admin/includes/media.php';
+}
+
 /**
  * A helper class for insert or update post data.
  *
@@ -99,6 +107,12 @@ class AJCI_Import_Post_Helper
 
         $term_info = wp_insert_term($name, $taxonomy, $args);
 
+        if (is_wp_error($term_info) && ($term_info->get_error_code() === 'missing_parent' || $term_info->get_error_code() === 'parent_does_not_exist')) {
+            echo esc_html(sprintf('⚠️ 警告: ターム "%s" の親タームID "%s" が見つからないため、親なし（0）として作成しました。<br>', $name, $args['parent']));
+            $args['parent'] = 0;
+            $term_info = wp_insert_term($name, $taxonomy, $args);
+        }
+
         if (is_wp_error($term_info)) {
             if ($term_info->get_error_code() === 'term_exists') {
                 $existing_term_id = $term_info->get_error_data();
@@ -145,6 +159,11 @@ class AJCI_Import_Post_Helper
             if (isset($data['parent'])) $args['parent'] = $data['parent'];
 
             $term_info = wp_update_term($term->term_id, $taxonomy, $args);
+            if (is_wp_error($term_info) && ($term_info->get_error_code() === 'parent_does_not_exist' || $term_info->get_error_code() === 'missing_parent')) {
+                echo esc_html(sprintf('⚠️ 警告: ターム "%s" の親タームID "%s" が見つからないため、親なし（0）として更新しました。<br>', $term->name, $args['parent']));
+                $args['parent'] = 0;
+                $term_info = wp_update_term($term->term_id, $taxonomy, $args);
+            }
             if (is_wp_error($term_info)) {
                 $this->addError($term_info->get_error_code(), $term_info->get_error_message());
             } else {
@@ -467,16 +486,27 @@ class AJCI_Import_Post_Helper
             }
         }
 
+        $new_array = array();
         // 2. 通常の再帰処理
         foreach ($array as $key => $value) {
             // 現在のフィールドのタイプをACF設定から取得
             $current_type = '';
-            if (function_exists('acf_get_field') && !is_numeric($key)) {
-                $field_info = acf_get_field($key);
-                // field_ 始まりのフィールド名はACFがキーとして検索するが実際には名前の場合があるため、
-                // キー検索に失敗した場合は名前検索にフォールバックする
-                if (!is_array($field_info) && strpos($key, 'field_') === 0 && function_exists('acf_get_field_by_name')) {
-                    $field_info = acf_get_field_by_name($key);
+            $new_key = $key;
+            if (function_exists('acf_get_field') && is_string($key)) {
+                $field_info = null;
+                if (strpos($key, 'field_') === 0) {
+                    $field_info = acf_get_field($key);
+                    if (is_array($field_info) && isset($field_info['name']) && $field_info['name'] !== '') {
+                        $new_key = $field_info['name'];
+                    }
+                }
+                
+                if (!$field_info) {
+                    if (strpos($key, 'field_') === 0) {
+                        $field_info = acf_get_field($key);
+                    } elseif (function_exists('acf_get_field_by_name')) {
+                        $field_info = acf_get_field_by_name($key);
+                    }
                 }
                 if (is_array($field_info) && isset($field_info['type'])) {
                     $current_type = $field_info['type'];
@@ -484,7 +514,7 @@ class AJCI_Import_Post_Helper
             }
 
             if (is_array($value)) {
-                $array[$key] = $this->processAcfArrayImages($value, $current_type ? $current_type : $parent_type);
+                $new_array[$new_key] = $this->processAcfArrayImages($value, $current_type ? $current_type : $parent_type);
             } else {
                 $is_image_field = false;
 
@@ -499,21 +529,23 @@ class AJCI_Import_Post_Helper
                 if ($is_image_field && (is_numeric($value) || (is_string($value) && ctype_digit($value)))) {
                     $new_id = $this->resolveImageId($value);
                     if ($new_id) {
-                        $array[$key] = $new_id;
+                        $new_array[$new_key] = $new_id;
                     } else {
                         // 解決できなかった場合も整数型で保持する（ACFの型互換性を維持）
-                        $array[$key] = (int) $value;
+                        $new_array[$new_key] = (int) $value;
                     }
                 }
                 // URLの場合
                 elseif ($is_image_field && is_string($value) && filter_var($value, FILTER_VALIDATE_URL)) {
                     $attachment_id = $this->addMediaFile($value);
                     if ($attachment_id) {
-                        $array[$key] = $attachment_id;
+                        $new_array[$new_key] = $attachment_id;
                     } else {
                         $found_id = attachment_url_to_postid($value);
                         if ($found_id) {
-                            $array[$key] = $found_id;
+                            $new_array[$new_key] = $found_id;
+                        } else {
+                            $new_array[$new_key] = $value;
                         }
                     }
                 }
@@ -525,15 +557,23 @@ class AJCI_Import_Post_Helper
                         if (in_array($ext, array('jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'zip'))) {
                             $attachment_id = $this->addMediaFile($value);
                             if ($attachment_id) {
-                                $array[$key] = $attachment_id;
+                                $new_array[$new_key] = $attachment_id;
+                            } else {
+                                $new_array[$new_key] = $value;
                             }
+                        } else {
+                            $new_array[$new_key] = $value;
                         }
+                    } else {
+                        $new_array[$new_key] = $value;
                     }
+                } else {
+                    $new_array[$new_key] = $value;
                 }
             }
         }
 
-        return $array;
+        return $new_array;
     }
 
     /**
@@ -984,9 +1024,74 @@ class AJCI_Import_Post_Helper
             return (int) $new_id;
         }
 
-        // 2. マッピングがない場合、移行元サーバーの REST API を叩いて画像URLを取得し、ダウンロードを試みる
+        // 2. マッピングがなく、かつ移行元が同じサーバー上に物理的に存在する場合、ファイルを直接コピーしてアタッチメント登録を試みる
         $origin_domain = $this->getImportOriginDomain();
         if ($origin_domain) {
+            $local_wp_path = $this->resolveLocalWpPath($origin_domain);
+            if ($local_wp_path) {
+                $local_conn = $this->getSourceDbConnection($local_wp_path);
+                if ($local_conn) {
+                    // 移行元DBから _wp_attached_file と post_title を取得
+                    $config_content = file_get_contents($local_wp_path . '/wp-config.php');
+                    preg_match("/\\\$table_prefix\s*=\s*'([^']+)'/i", $config_content, $m_prefix);
+                    $prefix = isset($m_prefix[1]) ? $m_prefix[1] : 'wp_';
+                    
+                    $q_file = mysqli_query($local_conn, "SELECT meta_value FROM {$prefix}postmeta WHERE post_id = " . (int)$old_id . " AND meta_key = '_wp_attached_file' LIMIT 1");
+                    $row_file = mysqli_fetch_assoc($q_file);
+                    $attached_file = isset($row_file['meta_value']) ? $row_file['meta_value'] : '';
+                    
+                    $q_post = mysqli_query($local_conn, "SELECT post_title, post_content, post_mime_type FROM {$prefix}posts WHERE ID = " . (int)$old_id . " LIMIT 1");
+                    $row_post = mysqli_fetch_assoc($q_post);
+                    
+                    mysqli_close($local_conn);
+                    
+                    if ($attached_file && $row_post) {
+                        $source_file_path = rtrim($local_wp_path, '/') . '/wp-content/uploads/' . $attached_file;
+                        if (file_exists($source_file_path)) {
+                            // 移行先のアップロードディレクトリを取得し、コピーする
+                            $wp_uploads = wp_upload_dir();
+                            $dest_file_name = basename($source_file_path);
+                            $dest_sub_dir = dirname($attached_file);
+                            
+                            $dest_dir = $wp_uploads['basedir'] . '/' . $dest_sub_dir;
+                            if (!file_exists($dest_dir)) {
+                                wp_mkdir_p($dest_dir);
+                            }
+                            
+                            $dest_file_path = $dest_dir . '/' . wp_unique_filename($dest_dir, $dest_file_name);
+                            if (copy($source_file_path, $dest_file_path)) {
+                                // アタッチメントを挿入
+                                $attachment_data = array(
+                                    'post_mime_type' => $row_post['post_mime_type'],
+                                    'guid'           => $wp_uploads['baseurl'] . '/' . $dest_sub_dir . '/' . basename($dest_file_path),
+                                    'post_title'     => $row_post['post_title'],
+                                    'post_content'   => $row_post['post_content'],
+                                    'post_status'    => 'inherit'
+                                );
+                                $attachment_id = wp_insert_attachment($attachment_data, $dest_file_path);
+                                if ($attachment_id) {
+                                    require_once(ABSPATH . 'wp-admin/includes/image.php');
+                                    $attachment_metadata = wp_generate_attachment_metadata($attachment_id, $dest_file_path);
+                                    wp_update_attachment_metadata($attachment_id, $attachment_metadata);
+                                    
+                                    // 移行元URLと旧IDをメタデータとして保存
+                                    update_post_meta($attachment_id, '_really_simple_csv_importer_old_id', $old_id);
+                                    // _source_url を作成
+                                    $source_url = rtrim($origin_domain, '/') . '/wp-content/uploads/' . $attached_file;
+                                    update_post_meta($attachment_id, '_source_url', $source_url);
+                                    
+                                    return $attachment_id;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. マッピングがなく、ローカル解決もできない場合、移行元サーバーの REST API を叩いて画像URLを取得し、ダウンロードを試みる
+        if ($origin_domain) {
+            $source_url = '';
             $api_url = $origin_domain . '/wp-json/wp/v2/media/' . (int)$old_id;
             
             $args = array(
@@ -1011,20 +1116,140 @@ class AJCI_Import_Post_Helper
                 $body = json_decode(wp_remote_retrieve_body($response), true);
                 if (is_array($body) && isset($body['source_url'])) {
                     $source_url = $body['source_url'];
-                    
-                    // 旧IDを紐付け情報として渡すために $data を用意
-                    $data = array(
-                        'ID' => (int) $old_id
-                    );
-                    $attachment_id = $this->addMediaFile($source_url, $data);
-                    if ($attachment_id) {
-                        return $attachment_id;
+                }
+            }
+
+            // REST API が失敗した場合、または無効化されている場合、HTMLページからスクレイピングを試みる
+            if (empty($source_url)) {
+                $html_url = rtrim($origin_domain, '/') . '/?attachment_id=' . (int)$old_id;
+                // リダイレクトを確実に追跡するため、最初から wp_remote_get を使用する
+                $args['redirection'] = 10;
+                $html_response = wp_remote_get($html_url, $args);
+                if (!is_wp_error($html_response) && wp_remote_retrieve_response_code($html_response) === 200) {
+                    $html_body = wp_remote_retrieve_body($html_response);
+                    // 正規表現で画像URLを抽出
+                    // 1. <p class="attachment"><a href='...' または <p class="attachment"><a href="..."
+                    if (preg_match('/<p class="attachment"><a href=[\'\"]([^\'\"]+)[\'\"]/i', $html_body, $matches)) {
+                        $source_url = $matches[1];
                     }
+                    // 2. フォールバック: href="...wp-content/uploads/..." へのリンク
+                    elseif (preg_match('/href=[\'\"]([^\'\"]+wp-content\/uploads\/[^\'\"]+)[\'\"]/i', $html_body, $matches)) {
+                        $source_url = $matches[1];
+                    }
+                }
+            }
+
+            if ($source_url) {
+                // 旧IDを紐付け情報として渡すために $data を用意
+                $data = array(
+                    'ID' => (int) $old_id
+                );
+                $attachment_id = $this->addMediaFile($source_url, $data);
+                if ($attachment_id) {
+                    return $attachment_id;
                 }
             }
         }
 
         return 0;
+    }
+
+    /**
+     * 移行元ドメインURLから同じサーバー上の物理ディレクトリパスを解決する
+     *
+     * @param string $origin_url 移行元URL
+     * @return string 物理パス（末尾スラッシュなし）。解決できない場合は空文字
+     */
+    private function resolveLocalWpPath($origin_url)
+    {
+        $parsed = parse_url($origin_url);
+        if (!isset($parsed['host'])) {
+            return '';
+        }
+        $host = $parsed['host'];
+        $path = isset($parsed['path']) ? trim($parsed['path'], '/') : '';
+        
+        $current_path = ABSPATH;
+        $user_base = '';
+        if (strpos($current_path, '/home/') === 0) {
+            $parts = explode('/', trim($current_path, '/'));
+            if (count($parts) >= 2) {
+                $user_base = '/home/' . $parts[1];
+            }
+        }
+        
+        if (empty($user_base)) {
+            return '';
+        }
+        
+        // 候補1: Xserver方式 (username/domain/public_html/path)
+        $candidate1 = rtrim($user_base, '/') . '/' . $host . '/public_html';
+        if (!empty($path)) {
+            $candidate1 .= '/' . $path;
+        }
+        if (file_exists($candidate1 . '/wp-config.php')) {
+            return $candidate1;
+        }
+        
+        // 候補2: ドメインディレクトリ直下 (username/domain/path)
+        $candidate2 = rtrim($user_base, '/') . '/' . $host;
+        if (!empty($path)) {
+            $candidate2 .= '/' . $path;
+        }
+        if (file_exists($candidate2 . '/wp-config.php')) {
+            return $candidate2;
+        }
+
+        // 候補3: Heteml方式 (username/web/domain/path)
+        if (strpos($current_path, '/web/') !== false) {
+            $web_pos = strpos($current_path, '/web/');
+            $heteml_base = substr($current_path, 0, $web_pos + 5);
+            $candidate3 = rtrim($heteml_base, '/') . '/' . $host;
+            if (!empty($path)) {
+                $candidate3 .= '/' . $path;
+            }
+            if (file_exists($candidate3 . '/wp-config.php')) {
+                return $candidate3;
+            }
+        }
+        
+        return '';
+    }
+
+    /**
+     * 指定されたWordPressディレクトリの wp-config.php を読み取りDBコネクションを取得する
+     *
+     * @param string $wp_path WordPress物理パス
+     * @return mysqli|null DBコネクション
+     */
+    private function getSourceDbConnection($wp_path)
+    {
+        $config_path = rtrim($wp_path, '/') . '/wp-config.php';
+        if (!file_exists($config_path)) {
+            return null;
+        }
+        $config_content = file_get_contents($config_path);
+        
+        preg_match("/define\(\s*'DB_NAME'\s*,\s*'([^']+)'\s*\)/i", $config_content, $m_name);
+        preg_match("/define\(\s*'DB_USER'\s*,\s*'([^']+)'\s*\)/i", $config_content, $m_user);
+        preg_match("/define\(\s*'DB_PASSWORD'\s*,\s*'([^']+)'\s*\)/i", $config_content, $m_pass);
+        preg_match("/define\(\s*'DB_HOST'\s*,\s*'([^']+)'\s*\)/i", $config_content, $m_host);
+        
+        $db_name = isset($m_name[1]) ? $m_name[1] : '';
+        $db_user = isset($m_user[1]) ? $m_user[1] : '';
+        $db_pass = isset($m_pass[1]) ? $m_pass[1] : '';
+        $db_host = isset($m_host[1]) ? $m_host[1] : 'localhost';
+        
+        if (empty($db_name) || empty($db_user)) {
+            return null;
+        }
+        
+        $conn = @mysqli_connect($db_host, $db_user, $db_pass, $db_name);
+        if (!$conn) {
+            return null;
+        }
+        mysqli_set_charset($conn, 'utf8');
+        return $conn;
     }
     
     /**

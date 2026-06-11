@@ -4,6 +4,11 @@ An integrated tool to export and import ACF (Advanced Custom Fields) flexible co
 
 ## Changelog
 
+### 1.0.25 (2026-06-11)
+- 改善: 移行元サイトの REST API が無効化（`rest_disabled`）されている場合でも、画像の取得ができるよう修正。フォールバックとして、HTMLアタッチメントページ（`/?attachment_id=xxx`）からリダイレクトを最大10回追跡し、ページ内のHTML（`<p class="attachment"><a href="...">`）からオリジナルの画像URLを正規表現でスクレイピングして取得・ダウンロードする機能を追加しました。
+- 不具合修正: WP-CLI等の非管理画面コンテキスト（またはフロントエンド等）でインポートを実行した際、`wp_generate_attachment_metadata` や `wp_update_attachment_metadata` などのメディアメタデータ作成関数が定義されておらず、画像アタッチメント登録がサイレントに失敗していた問題を修正。画像インポートヘルパーの処理開始時に必要なWordPressコアファイル（`image.php`等）を明示的に読み込むようにしました。
+- 改善: 同一サーバー・ローカル環境内でのドメイン違いの移行時に、移行元ドメインのWordPress物理パスを自動推測し、`wp-config.php` からDB接続して画像メタデータを直接検索・アタッチメント解決する処理（`resolveLocalWpPath` / `getSourceDbConnection`）を実装しました。
+
 ### 1.0.24 (2026-06-11)
 - 不具合修正: 1.0.22 以前のバージョンでの誤ったフォールバック処理により、すでにデータベースに書き込まれてしまった「柔軟コンテンツの破損データ」を安全にクリーンアップする機能を追加しました。URLに `?cleanup_acf_error=1` パラメータを付与してアクセスすることで、クリーンアップを実行し `Cannot access offset of type array` 致命的エラーを解消できます。
 
