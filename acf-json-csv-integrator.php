@@ -4,7 +4,7 @@ Plugin Name: ACF JSON CSV Integrator
 Plugin URI: https://github.com/aurora-ship-sato/acf-json-csv-integrator
 Description: An integrated tool to export and import ACF (Advanced Custom Fields) flexible content and repeaters seamlessly as JSON-formatted strings via CSV.
 Author: Gemini
-Version: 1.0.14
+Version: 1.0.15
 License: GPLv2 or later
 Text Domain: acf-json-csv-integrator
 Update URI: false
@@ -35,7 +35,52 @@ if (file_exists(AJCI_PLUGIN_DIR . 'lib/plugin-update-checker/plugin-update-check
   // クエリパラメータ ?force_update_check=1 が指定された場合、キャッシュを強制クリアしてGitHubに再問い合わせする
   if (isset($_GET['force_update_check']) && is_admin()) {
     $myUpdateChecker->getUpdateState()->setLastCheckToZero();
-    $myUpdateChecker->checkForUpdates();
+    $result = $myUpdateChecker->checkForUpdates();
+
+    add_action('admin_notices', function() use ($myUpdateChecker, $result) {
+      echo '<div class="notice notice-warning" style="padding: 15px; border-left-color: #ffb900;">';
+      echo '<h3 style="margin-top:0;">ACF JSON CSV Integrator - 自動更新デバッグ</h3>';
+      echo '<p><strong>更新検出結果:</strong> ' . ($result ? '<span style="color:green;font-weight:bold;">検出あり</span>' : '<span style="color:red;font-weight:bold;">検出なし</span>') . '</p>';
+      
+      $state = $myUpdateChecker->getUpdateState();
+      echo '<p><strong>最終チェック時間:</strong> ' . date('Y-m-d H:i:s', $state->getLastCheck()) . '</p>';
+      
+      $vcs = $myUpdateChecker->getVcsApi();
+      if ($vcs) {
+          echo '<p><strong>GitHubリポジトリ:</strong> ' . esc_html($vcs->getRepositoryUrl()) . '</p>';
+          try {
+              $latestTag = $vcs->getLatestTag();
+              if ($latestTag) {
+                  echo '<p><strong>最新取得タグ:</strong> ' . esc_html($latestTag->name) . ' (バージョン: ' . esc_html($latestTag->version) . ')</p>';
+              } else {
+                  echo '<p><strong>最新取得タグ:</strong> 取得失敗、または無し</p>';
+              }
+          } catch (\Exception $e) {
+              echo '<p><strong>タグ取得エラー:</strong> ' . esc_html($e->getMessage()) . '</p>';
+          }
+
+          // WP通信の直接テスト
+          $url = 'https://api.github.com/repos/aurora-ship-sato/acf-json-csv-integrator/tags';
+          $options = array(
+              'headers' => array(
+                  'Authorization' => 'Basic ' . base64_encode('aurora-ship-sato:REDACTED_GITHUB_TOKEN')
+              ),
+              'timeout' => 10
+          );
+          $response = wp_remote_get($url, $options);
+          if (is_wp_error($response)) {
+              echo '<p style="color:red;"><strong>WordPress HTTP通信エラー:</strong> ' . esc_html($response->get_error_message()) . '</p>';
+          } else {
+              $code = wp_remote_retrieve_response_code($response);
+              $body = wp_remote_retrieve_body($response);
+              echo '<p><strong>HTTP ステータスコード:</strong> ' . intval($code) . '</p>';
+              if ($code !== 200) {
+                  echo '<pre style="background:#f4f4f4; padding:10px; border:1px solid #ccc; font-size:12px; max-height:200px; overflow:auto;">' . esc_html($body) . '</pre>';
+              }
+          }
+      }
+      echo '</div>';
+    });
   }
 }
 
