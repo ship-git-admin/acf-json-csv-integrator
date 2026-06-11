@@ -347,6 +347,9 @@ class RS_CSV_Importer extends WP_Importer {
 					}
 
 					if (!$error->get_error_codes()) {
+						// 画像再紐付け用のヘルパーインスタンスを作成
+						$helper = new RSCSV_Import_Post_Helper();
+
 						// 各カラムの値をオプションに保存
 						foreach ($data as $key => $value) {
 							if ($value !== false && isset($this->column_keys[$key])) {
@@ -357,10 +360,38 @@ class RS_CSV_Importer extends WP_Importer {
 
 								// JSON 文字列の場合はデコード（ACFの配列データ対応）
 								$decoded_value = json_decode($value, true);
+								$is_json_array = false;
 								if ($decoded_value !== null || $value === '[]' || $value === '{}') {
 									$final_value = $decoded_value;
+									$is_json_array = is_array($final_value);
 								} else {
 									$final_value = $value;
+								}
+
+								// 画像ダウンロード・ID再紐付け処理
+								if (function_exists('get_field_object')) {
+									if (strpos($col_key, 'field_') === 0) {
+										// 単一画像・ファイルフィールドのキーの場合
+										$fobj = get_field_object($col_key);
+										if (is_array($fobj) && isset($fobj['key']) && $fobj['key'] == $col_key) {
+											if (isset($fobj['type']) && ($fobj['type'] === 'image' || $fobj['type'] === 'file')) {
+												if (is_string($final_value) && filter_var($final_value, FILTER_VALIDATE_URL)) {
+													$attachment_id = $helper->addMediaFile($final_value);
+													if ($attachment_id) {
+														$final_value = $attachment_id;
+													}
+												} elseif (is_numeric($final_value) || (is_string($final_value) && ctype_digit($final_value))) {
+													$new_id = $helper->resolveImageId($final_value);
+													if ($new_id) {
+														$final_value = $new_id;
+													}
+												}
+											}
+										}
+									} elseif ($is_json_array) {
+										// JSON配列の場合は、配列内画像URL/IDを再帰置換
+										$final_value = $helper->processAcfArrayImages($final_value);
+									}
 								}
 
 								// ACFの update_field が使えるなら使い、そうでなければ update_option を使う

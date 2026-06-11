@@ -401,13 +401,7 @@ class RSCSV_Import_Post_Helper
     }
     
     /**
-     * ACF配列内の画像URLを自動的にダウンロード・メディア登録し、アタッチメントIDに置換する（再帰処理）
-     *
-     * @param array $array ACFの多次元配列
-     * @param string $parent_type 親フィールドのACFタイプ
-     * @return array 変換後の多次元配列
-     */
-    protected function processAcfArrayImages($array, $parent_type = '')
+     public function processAcfArrayImages($array, $parent_type = '')
     {
         if (!is_array($array)) {
             return $array;
@@ -442,7 +436,7 @@ class RSCSV_Import_Post_Helper
 
             if (is_array($value)) {
                 $array[$key] = $this->processAcfArrayImages($value, $current_type ? $current_type : $parent_type);
-            } elseif (is_string($value) && !empty($value)) {
+            } else {
                 $is_image_field = false;
 
                 // 親がギャラリー、画像、ファイル、またはこのフィールド自体が画像・ファイルの場合
@@ -452,21 +446,43 @@ class RSCSV_Import_Post_Helper
                     $is_image_field = true;
                 }
 
+                // 数値または数値文字列（旧画像ID）の場合
+                if ($is_image_field && (is_numeric($value) || (is_string($value) && ctype_digit($value)))) {
+                    $new_id = $this->resolveImageId($value);
+                    if ($new_id) {
+                        $array[$key] = $new_id;
+                    }
+                }
+                // URLの場合
+                elseif ($is_image_field && is_string($value) && filter_var($value, FILTER_VALIDATE_URL)) {
+                    $attachment_id = $this->addMediaFile($value);
+                    if ($attachment_id) {
+                        $array[$key] = $attachment_id;
+                    } else {
+                        $found_id = attachment_url_to_postid($value);
+                        if ($found_id) {
+                            $array[$key] = $found_id;
+                        }
+                    }
+                }
                 // フォールバック: 値が画像の拡張子を持つURLの場合
-                if (!$is_image_field) {
-                    $is_url = filter_var($value, FILTER_VALIDATE_URL);
-                    if ($is_url) {
-                        $path_info = pathinfo(parse_url($value, PHP_URL_PATH));
-                        if (isset($path_info['extension'])) {
-                            $ext = strtolower($path_info['extension']);
-                            if (in_array($ext, array('jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'zip'))) {
-                                $is_image_field = true;
+                elseif (is_string($value) && filter_var($value, FILTER_VALIDATE_URL)) {
+                    $path_info = pathinfo(parse_url($value, PHP_URL_PATH));
+                    if (isset($path_info['extension'])) {
+                        $ext = strtolower($path_info['extension']);
+                        if (in_array($ext, array('jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'zip'))) {
+                            $attachment_id = $this->addMediaFile($value);
+                            if ($attachment_id) {
+                                $array[$key] = $attachment_id;
                             }
                         }
                     }
                 }
+            }
+        }
 
-                // 画像/ファイルフィールドとして扱う場合、URLをダウンロードしてメディア登録しIDに置換
+        return $array;
+    }��
                 if ($is_image_field && filter_var($value, FILTER_VALIDATE_URL)) {
                     $attachment_id = $this->addMediaFile($value);
                     if ($attachment_id) {
@@ -611,12 +627,26 @@ class RSCSV_Import_Post_Helper
      */
     public function addMediaFile($file, $data = null)
     {
+        $url = '';
         if (parse_url($file, PHP_URL_SCHEME)) {
             $url = $file;
 
             // ① 同じURLのメディアが既に存在する場合はそのIDを返す（重複ダウンロード防止）
             $existing_id = attachment_url_to_postid($url);
             if ($existing_id) {
+                $old_id = null;
+                if (is_array($data)) {
+                    if (isset($data['ID'])) {
+                        $old_id = $data['ID'];
+                    } elseif (isset($data['post_id'])) {
+                        $old_id = $data['post_id'];
+                    } elseif (isset($data['import_id'])) {
+                        $old_id = $data['import_id'];
+                    }
+                }
+                if ($old_id) {
+                    update_post_meta($existing_id, '_really_simple_csv_importer_old_id', $old_id);
+                }
                 return $existing_id;
             }
 
@@ -634,7 +664,21 @@ class RSCSV_Import_Post_Helper
                         'title'          => sanitize_file_name($basename),
                     ));
                     if ($query->have_posts()) {
-                        return $query->posts[0]->ID;
+                        $found_id = $query->posts[0]->ID;
+                        $old_id = null;
+                        if (is_array($data)) {
+                            if (isset($data['ID'])) {
+                                $old_id = $data['ID'];
+                            } elseif (isset($data['post_id'])) {
+                                $old_id = $data['post_id'];
+                            } elseif (isset($data['import_id'])) {
+                                $old_id = $data['import_id'];
+                            }
+                        }
+                        if ($old_id) {
+                            update_post_meta($found_id, '_really_simple_csv_importer_old_id', $old_id);
+                        }
+                        return $found_id;
                     }
                 }
                 return false;
@@ -642,6 +686,22 @@ class RSCSV_Import_Post_Helper
         }
         $id = $this->setAttachment($file, $data);
         if ($id) {
+            if ($url) {
+                update_post_meta($id, '_source_url', $url);
+            }
+            $old_id = null;
+            if (is_array($data)) {
+                if (isset($data['ID'])) {
+                    $old_id = $data['ID'];
+                } elseif (isset($data['post_id'])) {
+                    $old_id = $data['post_id'];
+                } elseif (isset($data['import_id'])) {
+                    $old_id = $data['import_id'];
+                }
+            }
+            if ($old_id) {
+                update_post_meta($id, '_really_simple_csv_importer_old_id', $old_id);
+            }
             return $id;
         }
 
@@ -797,6 +857,119 @@ class RSCSV_Import_Post_Helper
         }
         
         return '';
+    }
+    /**
+     * 移行元ドメインをデータベース上の既存メディアから特定する
+     * 
+     * @return string ドメインURL（末尾スラッシュなし）
+     */
+    public function getImportOriginDomain()
+    {
+        global $wpdb;
+
+        // 1. _source_url メタキーを持つアタッチメントを検索
+        $source_url = $wpdb->get_var("
+            SELECT meta_value 
+            FROM $wpdb->postmeta 
+            WHERE meta_key = '_source_url' AND meta_value LIKE 'http%' 
+            LIMIT 1
+        ");
+        if ($source_url) {
+            $parsed = parse_url($source_url);
+            if (isset($parsed['scheme']) && isset($parsed['host'])) {
+                $port = isset($parsed['port']) ? ':' . $parsed['port'] : '';
+                return $parsed['scheme'] . '://' . $parsed['host'] . $port;
+            }
+        }
+
+        // 2. なければ、現在のホスト名とは異なる guid を持つアタッチメントを検索
+        $current_host = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : '';
+        if ($current_host) {
+            $guid_url = $wpdb->get_var($wpdb->prepare("
+                SELECT guid 
+                FROM $wpdb->posts 
+                WHERE post_type = 'attachment' AND guid LIKE 'http%' AND guid NOT LIKE %s 
+                LIMIT 1
+            ", '%' . $wpdb->esc_like($current_host) . '%'));
+            if ($guid_url) {
+                $parsed = parse_url($guid_url);
+                if (isset($parsed['scheme']) && isset($parsed['host'])) {
+                    $port = isset($parsed['port']) ? ':' . $parsed['port'] : '';
+                    return $parsed['scheme'] . '://' . $parsed['host'] . $port;
+                }
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * 旧画像IDから新画像IDを解決する。見つからない場合は移行元サーバーからダウンロードを試みる
+     * 
+     * @param int|string $old_id 旧サーバーの画像ID
+     * @return int 新しいアタッチメントID。失敗時は0
+     */
+    public function resolveImageId($old_id)
+    {
+        if (empty($old_id) || !is_numeric($old_id)) {
+            return 0;
+        }
+
+        global $wpdb;
+
+        // 1. すでにインポート済みのマッピングテーブルから検索
+        $new_id = $wpdb->get_var($wpdb->prepare("
+            SELECT post_id 
+            FROM $wpdb->postmeta 
+            WHERE meta_key = '_really_simple_csv_importer_old_id' AND meta_value = %s 
+            LIMIT 1
+        ", $old_id));
+
+        if ($new_id) {
+            return (int) $new_id;
+        }
+
+        // 2. マッピングがない場合、移行元サーバーの REST API を叩いて画像URLを取得し、ダウンロードを試みる
+        $origin_domain = $this->getImportOriginDomain();
+        if ($origin_domain) {
+            $api_url = $origin_domain . '/wp-json/wp/v2/media/' . (int)$old_id;
+            
+            $args = array(
+                'timeout' => 15,
+            );
+
+            // Basic 認証情報の付与
+            $user = self::$basic_auth_user;
+            $pass = self::$basic_auth_pass;
+            if (!empty($user) && !empty($pass)) {
+                $args['headers'] = array(
+                    'Authorization' => 'Basic ' . base64_encode($user . ':' . $pass)
+                );
+            }
+
+            $response = wp_safe_remote_get($api_url, $args);
+            if (is_wp_error($response)) {
+                $response = wp_remote_get($api_url, $args);
+            }
+
+            if (!is_wp_error($response) && wp_remote_retrieve_response_code($response) === 200) {
+                $body = json_decode(wp_remote_retrieve_body($response), true);
+                if (is_array($body) && isset($body['source_url'])) {
+                    $source_url = $body['source_url'];
+                    
+                    // 旧IDを紐付け情報として渡すために $data を用意
+                    $data = array(
+                        'ID' => (int) $old_id
+                    );
+                    $attachment_id = $this->addMediaFile($source_url, $data);
+                    if ($attachment_id) {
+                        return $attachment_id;
+                    }
+                }
+            }
+        }
+
+        return 0;
     }
     
     /**
