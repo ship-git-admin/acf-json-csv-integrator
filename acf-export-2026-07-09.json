@@ -1,0 +1,1735 @@
+[
+    {
+        "key": "group_653646fe03a74",
+        "title": "リフォームメニューver2.0",
+        "fields": [
+            {
+                "key": "field_672db320399a5",
+                "label": "専用フォーマット",
+                "name": "Menu_Format",
+                "aria-label": "",
+                "type": "radio",
+                "instructions": "選択することで専用の項目が追加されます",
+                "required": 0,
+                "conditional_logic": [
+                    [
+                        {
+                            "field": "field_653646fe07526",
+                            "operator": "==",
+                            "value": "1"
+                        },
+                        {
+                            "field": "field_653646fe07526",
+                            "operator": "!=",
+                            "value": "1"
+                        }
+                    ]
+                ],
+                "wrapper": {
+                    "width": "",
+                    "class": "",
+                    "id": ""
+                },
+                "choices": {
+                    "1": "補助金",
+                    "10": "なし"
+                },
+                "default_value": 10,
+                "return_format": "value",
+                "layout": "vertical",
+                "other_choice": 0,
+                "save_other_choice": 0,
+                "allow_null": 0
+            },
+            {
+                "key": "field_653646fe074ef",
+                "label": "基本情報",
+                "name": "",
+                "aria-label": "",
+                "type": "tab",
+                "instructions": "",
+                "required": 0,
+                "conditional_logic": false,
+                "wrapper": {
+                    "width": "",
+                    "class": "",
+                    "id": ""
+                },
+                "placement": "top",
+                "endpoint": 0,
+                "selected": 0
+            },
+            {
+                "key": "field_653646fe07526",
+                "label": "おすすめ商品",
+                "name": "Menu_Recommendation",
+                "aria-label": "",
+                "type": "true_false",
+                "instructions": "おすすめ順で表示の優先度が上がります",
+                "required": 0,
+                "conditional_logic": [
+                    [
+                        {
+                            "field": "field_672db320399a5",
+                            "operator": "!=empty"
+                        },
+                        {
+                            "field": "field_672db320399a5",
+                            "operator": "==empty"
+                        }
+                    ]
+                ],
+                "wrapper": {
+                    "width": "33.3",
+                    "class": "",
+                    "id": ""
+                },
+                "message": "",
+                "default_value": 0,
+                "allow_in_bindings": 1,
+                "ui_on_text": "ON",
+                "ui_off_text": "OFF",
+                "ui": 1
+            },
+            {
+                "key": "field_6625a78cc04c4",
+                "label": "カテゴリ名表示",
+                "name": "Menu_Category",
+                "aria-label": "",
+                "type": "taxonomy",
+                "instructions": "",
+                "required": false,
+                "conditional_logic": false,
+                "wrapper": {
+                    "width": "33.3",
+                    "class": "",
+                    "id": ""
+                },
+                "taxonomy": "menu_cat",
+                "return_format": "object",
+                "field_type": "multi_select",
+                "allow_null": 1,
+                "multiple": 0,
+                "add_term": 1,
+                "load_terms": 0,
+                "save_terms": 0,
+                "bidirectional_target": []
+            },
+            {
+                "key": "field_65640e6cc8b6c",
+                "label": "関連シリーズ表示",
+                "name": "Menu_SelectType",
+                "aria-label": "",
+                "type": "true_false",
+                "instructions": "商品名の一致する関連するシリーズを表示します",
+                "required": 0,
+                "conditional_logic": 0,
+                "wrapper": {
+                    "width": "50",
+                    "class": "",
+                    "id": ""
+                },
+                "message": "",
+                "default_value": 0,
+                "allow_in_bindings": 1,
+                "ui_on_text": "ON",
+                "ui_off_text": "OFF",
+                "ui": 1
+            },
+            {
+                "key": "field_69e81ad7746c1",
+                "label": "工期",
+                "name": "menu_product_construction_period",
+                "aria-label": "",
+                "type": "text",
+                "instructions": "",
+                "required": 0,
+                "conditional_logic": 0,
+                "wrapper": {
+                    "width": "25",
+                    "class": "",
+                    "id": ""
+                },
+                "default_value": "",
+                "maxlength": 3,
+                "allow_in_bindings": 0,
+                "placeholder": "1日",
+                "prepend": "",
+                "append": ""
+            },
+            {
+                "key": "field_653646fe0755c",
+                "label": "商品名\/サービス・プラン名（H1）",
+                "name": "Menu_Product_Name",
+                "aria-label": "",
+                "type": "text",
+                "instructions": "H1は商品名\/サービス・プラン名+バリエーション・タイプ・グレード等",
+                "required": 0,
+                "conditional_logic": 0,
+                "wrapper": {
+                    "width": "33.3",
+                    "class": "",
+                    "id": ""
+                },
+                "default_value": "",
+                "maxlength": "",
+                "allow_in_bindings": 1,
+                "placeholder": "",
+                "prepend": "",
+                "append": ""
+            },
+            {
+                "key": "field_653646fe07592",
+                "label": "バリエーション・タイプ・グレード等（H1）",
+                "name": "Menu_Product_Variation",
+                "aria-label": "",
+                "type": "text",
+                "instructions": "H1は商品名\/サービス・プラン名+バリエーション・タイプ・グレード等",
+                "required": 0,
+                "conditional_logic": 0,
+                "wrapper": {
+                    "width": "33.3",
+                    "class": "",
+                    "id": ""
+                },
+                "default_value": "",
+                "maxlength": "",
+                "allow_in_bindings": 1,
+                "placeholder": "",
+                "prepend": "",
+                "append": ""
+            },
+            {
+                "key": "field_653646fe078ae",
+                "label": "キャッチコピー",
+                "name": "Menu_Product_Price_Catchphrase",
+                "aria-label": "",
+                "type": "text",
+                "instructions": "",
+                "required": false,
+                "conditional_logic": false,
+                "wrapper": {
+                    "width": "50",
+                    "class": "",
+                    "id": ""
+                },
+                "default_value": "",
+                "maxlength": "",
+                "placeholder": "",
+                "prepend": "",
+                "append": ""
+            },
+            {
+                "key": "field_653646fe078e4",
+                "label": "キャッチコピー説明",
+                "name": "Menu_Product_Price_Catchphrase_Explanation",
+                "aria-label": "",
+                "type": "wysiwyg",
+                "instructions": "",
+                "required": 0,
+                "conditional_logic": 0,
+                "wrapper": {
+                    "width": "50",
+                    "class": "",
+                    "id": ""
+                },
+                "default_value": "",
+                "allow_in_bindings": 0,
+                "tabs": "all",
+                "toolbar": "custom2",
+                "media_upload": 1,
+                "delay": 0
+            },
+            {
+                "key": "field_677f1df07a41e",
+                "label": "ファーストビュー設定",
+                "name": "",
+                "aria-label": "",
+                "type": "tab",
+                "instructions": "",
+                "required": 0,
+                "conditional_logic": false,
+                "wrapper": {
+                    "width": "",
+                    "class": "",
+                    "id": ""
+                },
+                "placement": "top",
+                "endpoint": 0,
+                "selected": 0
+            },
+            {
+                "key": "field_677f2764e40cd",
+                "label": "ファーストビュー設定について",
+                "name": "",
+                "aria-label": "",
+                "type": "message",
+                "instructions": "",
+                "required": 0,
+                "conditional_logic": false,
+                "wrapper": {
+                    "width": "",
+                    "class": "",
+                    "id": ""
+                },
+                "message": "ファーストビューの上にバッジ（ポップ）が重なる形で表示されます。<br>\r\nバッジの組み合わせによっては、重なって表示される場合がありますので、<b style=\"color:red;\">実装後は必ず表示をご確認ください。<\/b>",
+                "new_lines": "wpautop",
+                "esc_html": 0
+            },
+            {
+                "key": "field_677f1ae7c6a49",
+                "label": "ポップ設定",
+                "name": "Fv_Group",
+                "aria-label": "",
+                "type": "group",
+                "instructions": "",
+                "required": false,
+                "conditional_logic": false,
+                "wrapper": {
+                    "width": "50",
+                    "class": "",
+                    "id": ""
+                },
+                "layout": "block",
+                "sub_fields": [
+                    {
+                        "key": "field_677f1b83c6a4a",
+                        "label": "表示形式",
+                        "name": "Fv_Choice",
+                        "aria-label": "",
+                        "type": "radio",
+                        "instructions": "",
+                        "required": 0,
+                        "conditional_logic": 0,
+                        "wrapper": {
+                            "width": "",
+                            "class": "",
+                            "id": ""
+                        },
+                        "choices": {
+                            "1": "画像",
+                            "2": "補助金",
+                            "4": "メーカー保証",
+                            "5": "自社保証",
+                            "6": "%OFF表示",
+                            "3": "自由入力"
+                        },
+                        "default_value": "",
+                        "return_format": "value",
+                        "allow_null": 0,
+                        "other_choice": 0,
+                        "allow_in_bindings": 1,
+                        "layout": "horizontal",
+                        "save_other_choice": 0
+                    },
+                    {
+                        "key": "field_677f1bd0c6a53",
+                        "label": "画像",
+                        "name": "Fv_Img",
+                        "aria-label": "",
+                        "type": "relationship",
+                        "instructions": "",
+                        "required": false,
+                        "conditional_logic": [
+                            [
+                                {
+                                    "field": "field_677f1b83c6a4a",
+                                    "operator": "==",
+                                    "value": "1"
+                                }
+                            ]
+                        ],
+                        "wrapper": {
+                            "width": "100",
+                            "class": "",
+                            "id": ""
+                        },
+                        "post_type": [
+                            "menu-preset"
+                        ],
+                        "return_format": "object",
+                        "max": 1,
+                        "elements": [
+                            "featured_image"
+                        ],
+                        "taxonomy": [],
+                        "min": 0,
+                        "filters": [
+                            "search",
+                            "post_type",
+                            "taxonomy"
+                        ],
+                        "bidirectional_target": []
+                    },
+                    {
+                        "key": "field_6858a63bd48fc",
+                        "label": "画像サイズ",
+                        "name": "Fv_Img_Size",
+                        "aria-label": "",
+                        "type": "range",
+                        "instructions": "",
+                        "required": false,
+                        "conditional_logic": [
+                            [
+                                {
+                                    "field": "field_677f1b83c6a4a",
+                                    "operator": "==",
+                                    "value": "1"
+                                }
+                            ]
+                        ],
+                        "wrapper": {
+                            "width": "100",
+                            "class": "",
+                            "id": ""
+                        },
+                        "default_value": 20,
+                        "min": 0,
+                        "max": 40,
+                        "step": "",
+                        "prepend": "",
+                        "append": ""
+                    },
+                    {
+                        "key": "field_677f1ba6c6a4b",
+                        "label": "補助金",
+                        "name": "Fv_Subsidy",
+                        "aria-label": "",
+                        "type": "group",
+                        "instructions": "",
+                        "required": false,
+                        "conditional_logic": [
+                            [
+                                {
+                                    "field": "field_677f1b83c6a4a",
+                                    "operator": "==",
+                                    "value": "2"
+                                }
+                            ]
+                        ],
+                        "wrapper": {
+                            "width": "",
+                            "class": "",
+                            "id": ""
+                        },
+                        "layout": "block",
+                        "sub_fields": [
+                            {
+                                "key": "field_677f1ba6c6a4c",
+                                "label": "適応額",
+                                "name": "Fv_Subsidy_Number",
+                                "aria-label": "",
+                                "type": "number",
+                                "instructions": "",
+                                "required": false,
+                                "conditional_logic": false,
+                                "wrapper": {
+                                    "width": "70",
+                                    "class": "",
+                                    "id": ""
+                                },
+                                "default_value": "",
+                                "min": "",
+                                "max": "",
+                                "step": "",
+                                "placeholder": "",
+                                "prepend": "",
+                                "append": ""
+                            },
+                            {
+                                "key": "field_677f1ba6c6a4d",
+                                "label": "〜表示",
+                                "name": "Fv_Subsidy_Limit",
+                                "aria-label": "",
+                                "type": "true_false",
+                                "instructions": "",
+                                "required": false,
+                                "conditional_logic": false,
+                                "wrapper": {
+                                    "width": "30",
+                                    "class": "",
+                                    "id": ""
+                                },
+                                "message": "〜",
+                                "ui": 0,
+                                "default_value": 0,
+                                "ui_on_text": "",
+                                "ui_off_text": ""
+                            }
+                        ]
+                    },
+                    {
+                        "key": "field_684276509841b",
+                        "label": "メーカー保証",
+                        "name": "Fv_MakerGuarantee",
+                        "aria-label": "",
+                        "type": "group",
+                        "instructions": "",
+                        "required": false,
+                        "conditional_logic": [
+                            [
+                                {
+                                    "field": "field_677f1b83c6a4a",
+                                    "operator": "==",
+                                    "value": "4"
+                                }
+                            ]
+                        ],
+                        "wrapper": {
+                            "width": "",
+                            "class": "",
+                            "id": ""
+                        },
+                        "layout": "block",
+                        "sub_fields": [
+                            {
+                                "key": "field_684276bc9841c",
+                                "label": "保証年数",
+                                "name": "Number",
+                                "aria-label": "",
+                                "type": "number",
+                                "instructions": "",
+                                "required": false,
+                                "conditional_logic": false,
+                                "wrapper": {
+                                    "width": "",
+                                    "class": "",
+                                    "id": ""
+                                },
+                                "placeholder": 10,
+                                "default_value": "",
+                                "min": "",
+                                "max": "",
+                                "step": "",
+                                "prepend": "",
+                                "append": ""
+                            },
+                            {
+                                "key": "field_6842779fccbf4",
+                                "label": "「最大」をつける",
+                                "name": "Max",
+                                "aria-label": "",
+                                "type": "true_false",
+                                "instructions": "",
+                                "required": false,
+                                "conditional_logic": false,
+                                "wrapper": {
+                                    "width": "",
+                                    "class": "",
+                                    "id": ""
+                                },
+                                "default_value": 1,
+                                "ui": 1,
+                                "message": "",
+                                "ui_on_text": "",
+                                "ui_off_text": ""
+                            }
+                        ]
+                    },
+                    {
+                        "key": "field_684278629e087",
+                        "label": "自社保証",
+                        "name": "Fv_OrigGuarantee",
+                        "aria-label": "",
+                        "type": "group",
+                        "instructions": "",
+                        "required": false,
+                        "conditional_logic": [
+                            [
+                                {
+                                    "field": "field_677f1b83c6a4a",
+                                    "operator": "==",
+                                    "value": "5"
+                                }
+                            ]
+                        ],
+                        "wrapper": {
+                            "width": "",
+                            "class": "",
+                            "id": ""
+                        },
+                        "layout": "block",
+                        "sub_fields": [
+                            {
+                                "key": "field_684278629e088",
+                                "label": "保証年数",
+                                "name": "Number",
+                                "aria-label": "",
+                                "type": "number",
+                                "instructions": "",
+                                "required": false,
+                                "conditional_logic": false,
+                                "wrapper": {
+                                    "width": "",
+                                    "class": "",
+                                    "id": ""
+                                },
+                                "placeholder": 10,
+                                "default_value": "",
+                                "min": "",
+                                "max": "",
+                                "step": "",
+                                "prepend": "",
+                                "append": ""
+                            },
+                            {
+                                "key": "field_684278629e089",
+                                "label": "「最大」をつける",
+                                "name": "Max",
+                                "aria-label": "",
+                                "type": "true_false",
+                                "instructions": "",
+                                "required": false,
+                                "conditional_logic": false,
+                                "wrapper": {
+                                    "width": "",
+                                    "class": "",
+                                    "id": ""
+                                },
+                                "default_value": 1,
+                                "ui": 1,
+                                "message": "",
+                                "ui_on_text": "",
+                                "ui_off_text": ""
+                            }
+                        ]
+                    },
+                    {
+                        "key": "field_677f1c00c6a54",
+                        "label": "自由入力",
+                        "name": "Fv_Free",
+                        "aria-label": "",
+                        "type": "wysiwyg",
+                        "instructions": "",
+                        "required": false,
+                        "conditional_logic": [
+                            [
+                                {
+                                    "field": "field_677f1b83c6a4a",
+                                    "operator": "==",
+                                    "value": "3"
+                                }
+                            ]
+                        ],
+                        "wrapper": {
+                            "width": "100",
+                            "class": "",
+                            "id": ""
+                        },
+                        "tabs": "visual",
+                        "toolbar": "custom",
+                        "media_upload": 0,
+                        "default_value": "",
+                        "delay": 0
+                    },
+                    {
+                        "key": "field_69e81897cd39c",
+                        "label": "補足",
+                        "name": "",
+                        "aria-label": "",
+                        "type": "message",
+                        "instructions": "",
+                        "required": 0,
+                        "conditional_logic": [
+                            [
+                                {
+                                    "field": "field_677f1b83c6a4a",
+                                    "operator": "==",
+                                    "value": "6"
+                                }
+                            ]
+                        ],
+                        "wrapper": {
+                            "width": "",
+                            "class": "",
+                            "id": ""
+                        },
+                        "message": "価格情報から自動計算されます\r\nメーカー希望小売価格と商品価格を必ず入力してください。",
+                        "new_lines": "wpautop",
+                        "esc_html": 0
+                    }
+                ]
+            },
+            {
+                "key": "field_677f1e5671f40",
+                "label": "",
+                "name": "",
+                "aria-label": "",
+                "type": "message",
+                "instructions": "",
+                "required": 0,
+                "conditional_logic": false,
+                "wrapper": {
+                    "width": "50",
+                    "class": "",
+                    "id": ""
+                },
+                "new_lines": "wpautop",
+                "esc_html": 0,
+                "message": ""
+            },
+            {
+                "key": "field_677f25851d8a2",
+                "label": "左下",
+                "name": "LeftBottom",
+                "aria-label": "",
+                "type": "clone",
+                "instructions": "",
+                "required": false,
+                "conditional_logic": false,
+                "wrapper": {
+                    "width": "",
+                    "class": "",
+                    "id": ""
+                },
+                "clone": [
+                    "field_677f1ae7c6a49"
+                ],
+                "display": "seamless",
+                "layout": "block",
+                "prefix_label": 1,
+                "prefix_name": 1
+            },
+            {
+                "key": "field_677f26710ab3d",
+                "label": "右下",
+                "name": "RightBottom",
+                "aria-label": "",
+                "type": "clone",
+                "instructions": "",
+                "required": false,
+                "conditional_logic": false,
+                "wrapper": {
+                    "width": "",
+                    "class": "",
+                    "id": ""
+                },
+                "clone": [
+                    "field_677f1ae7c6a49"
+                ],
+                "display": "seamless",
+                "layout": "block",
+                "prefix_label": 1,
+                "prefix_name": 1
+            },
+            {
+                "key": "field_653646fe076fe",
+                "label": "価格情報",
+                "name": "",
+                "aria-label": "",
+                "type": "tab",
+                "instructions": "",
+                "required": 0,
+                "conditional_logic": false,
+                "wrapper": {
+                    "width": "",
+                    "class": "",
+                    "id": ""
+                },
+                "placement": "top",
+                "endpoint": 0,
+                "selected": 0
+            },
+            {
+                "key": "field_653646fe07734",
+                "label": "提供価格内訳",
+                "name": "Menu_Product_Price_Breakdown",
+                "aria-label": "",
+                "type": "radio",
+                "instructions": "",
+                "required": false,
+                "conditional_logic": false,
+                "wrapper": {
+                    "width": "28",
+                    "class": "",
+                    "id": ""
+                },
+                "choices": {
+                    "1": "商品価格のみ",
+                    "2": "商品価格+工事費"
+                },
+                "layout": "vertical",
+                "default_value": "",
+                "other_choice": 0,
+                "save_other_choice": 0,
+                "allow_null": 0,
+                "return_format": "value"
+            },
+            {
+                "key": "field_662228bc0fe55",
+                "label": "ディスカウントバッジ表示",
+                "name": "Menu_Product_Discount_Badge",
+                "aria-label": "",
+                "type": "radio",
+                "instructions": "",
+                "required": false,
+                "conditional_logic": [
+                    [
+                        {
+                            "field": "field_653646fe07734",
+                            "operator": "==",
+                            "value": "2"
+                        }
+                    ]
+                ],
+                "wrapper": {
+                    "width": "28",
+                    "class": "",
+                    "id": ""
+                },
+                "choices": {
+                    "1": "%OFF",
+                    "2": "工事費コミコミ",
+                    "4": "カスタムバッジ（自由記載）",
+                    "3": "非表示"
+                },
+                "default_value": 1,
+                "layout": "vertical",
+                "other_choice": 0,
+                "save_other_choice": 0,
+                "allow_null": 0,
+                "return_format": "value"
+            },
+            {
+                "key": "field_653646fe0776a",
+                "label": "ディスカウントバッジ表示",
+                "name": "Menu_Product_Discount_Badge",
+                "aria-label": "",
+                "type": "radio",
+                "instructions": "",
+                "required": false,
+                "conditional_logic": [
+                    [
+                        {
+                            "field": "field_653646fe07734",
+                            "operator": "==",
+                            "value": "1"
+                        }
+                    ]
+                ],
+                "wrapper": {
+                    "width": "28",
+                    "class": "",
+                    "id": ""
+                },
+                "choices": {
+                    "1": "%OFF",
+                    "4": "カスタムバッジ（自由記載）",
+                    "3": "非表示"
+                },
+                "default_value": 1,
+                "layout": "vertical",
+                "other_choice": 0,
+                "save_other_choice": 0,
+                "allow_null": 0,
+                "return_format": "value"
+            },
+            {
+                "key": "field_6729cd684faf4",
+                "label": "カスタムテキストバッジ（自由記載）",
+                "name": "Menu_Product_Custom_Badge",
+                "aria-label": "",
+                "type": "wysiwyg",
+                "instructions": "",
+                "required": false,
+                "conditional_logic": [
+                    [
+                        {
+                            "field": "field_662228bc0fe55",
+                            "operator": "==",
+                            "value": "4"
+                        }
+                    ],
+                    [
+                        {
+                            "field": "field_653646fe0776a",
+                            "operator": "==",
+                            "value": "4"
+                        }
+                    ]
+                ],
+                "wrapper": {
+                    "width": "44",
+                    "class": "",
+                    "id": ""
+                },
+                "tabs": "visual",
+                "toolbar": "custom",
+                "media_upload": 0,
+                "default_value": "",
+                "delay": 0
+            },
+            {
+                "key": "field_653646fe077a0",
+                "label": "商品価格",
+                "name": "Menu_Product_Price_Group",
+                "aria-label": "",
+                "type": "group",
+                "instructions": "",
+                "required": false,
+                "conditional_logic": false,
+                "wrapper": {
+                    "width": "50",
+                    "class": "",
+                    "id": ""
+                },
+                "layout": "table",
+                "sub_fields": [
+                    {
+                        "key": "field_653650db94f1c",
+                        "label": "消費税",
+                        "name": "Menu_Product_Price_Tax",
+                        "aria-label": "",
+                        "type": "radio",
+                        "instructions": "",
+                        "required": false,
+                        "conditional_logic": false,
+                        "wrapper": {
+                            "width": "20",
+                            "class": "",
+                            "id": ""
+                        },
+                        "choices": {
+                            "1": "税込",
+                            "2": "税抜"
+                        },
+                        "layout": "vertical",
+                        "default_value": "",
+                        "other_choice": 0,
+                        "save_other_choice": 0,
+                        "allow_null": 0,
+                        "return_format": "value"
+                    },
+                    {
+                        "key": "field_653646fe1225e",
+                        "label": "商品価格",
+                        "name": "Menu_Product_Price",
+                        "aria-label": "",
+                        "type": "number",
+                        "instructions": "",
+                        "required": false,
+                        "conditional_logic": false,
+                        "wrapper": {
+                            "width": "60",
+                            "class": "",
+                            "id": ""
+                        },
+                        "default_value": "",
+                        "min": "",
+                        "max": "",
+                        "step": "",
+                        "placeholder": "",
+                        "prepend": "",
+                        "append": ""
+                    },
+                    {
+                        "key": "field_653646fe12296",
+                        "label": "〜表示",
+                        "name": "Menu_Product_At",
+                        "aria-label": "",
+                        "type": "true_false",
+                        "instructions": "",
+                        "required": false,
+                        "conditional_logic": false,
+                        "wrapper": {
+                            "width": "20",
+                            "class": "",
+                            "id": ""
+                        },
+                        "ui": 0,
+                        "default_value": 0,
+                        "message": "",
+                        "ui_on_text": "",
+                        "ui_off_text": ""
+                    }
+                ]
+            },
+            {
+                "key": "field_653646fe0780c",
+                "label": "工事費",
+                "name": "Menu_Product_Construction_Cost_Group",
+                "aria-label": "",
+                "type": "group",
+                "instructions": "",
+                "required": false,
+                "conditional_logic": false,
+                "wrapper": {
+                    "width": "50",
+                    "class": "",
+                    "id": ""
+                },
+                "layout": "table",
+                "sub_fields": [
+                    {
+                        "key": "field_653652f5125f3",
+                        "label": "消費税",
+                        "name": "Menu_Product_Construction_Cost_Tax",
+                        "aria-label": "",
+                        "type": "radio",
+                        "instructions": "",
+                        "required": false,
+                        "conditional_logic": false,
+                        "wrapper": {
+                            "width": "20",
+                            "class": "",
+                            "id": ""
+                        },
+                        "choices": {
+                            "1": "税込",
+                            "2": "税抜"
+                        },
+                        "layout": "vertical",
+                        "default_value": "",
+                        "other_choice": 0,
+                        "save_other_choice": 0,
+                        "allow_null": 0,
+                        "return_format": "value"
+                    },
+                    {
+                        "key": "field_653646fe199f2",
+                        "label": "工事費",
+                        "name": "Menu_Product_Construction_Cost",
+                        "aria-label": "",
+                        "type": "number",
+                        "instructions": "",
+                        "required": false,
+                        "conditional_logic": false,
+                        "wrapper": {
+                            "width": "60",
+                            "class": "",
+                            "id": ""
+                        },
+                        "default_value": "",
+                        "min": "",
+                        "max": "",
+                        "step": "",
+                        "placeholder": "",
+                        "prepend": "",
+                        "append": ""
+                    },
+                    {
+                        "key": "field_653646fe19a28",
+                        "label": "〜表示",
+                        "name": "Menu_Product_Construction_Cost_At",
+                        "aria-label": "",
+                        "type": "true_false",
+                        "instructions": "",
+                        "required": false,
+                        "conditional_logic": false,
+                        "wrapper": {
+                            "width": "10",
+                            "class": "",
+                            "id": ""
+                        },
+                        "ui": 0,
+                        "default_value": 0,
+                        "message": "",
+                        "ui_on_text": "",
+                        "ui_off_text": ""
+                    }
+                ]
+            },
+            {
+                "key": "field_66335bef7d552",
+                "label": "提供価格",
+                "name": "Menu_Product_Total_Group",
+                "aria-label": "",
+                "type": "group",
+                "instructions": "",
+                "required": false,
+                "conditional_logic": false,
+                "wrapper": {
+                    "width": "50",
+                    "class": "",
+                    "id": ""
+                },
+                "layout": "table",
+                "sub_fields": [
+                    {
+                        "key": "field_66335c747d555",
+                        "label": "消費税",
+                        "name": "Menu_Product_Total_Tax",
+                        "aria-label": "",
+                        "type": "radio",
+                        "instructions": "",
+                        "required": false,
+                        "conditional_logic": false,
+                        "wrapper": {
+                            "width": "20",
+                            "class": "",
+                            "id": ""
+                        },
+                        "choices": {
+                            "1": "税込",
+                            "2": "税抜"
+                        },
+                        "layout": "vertical",
+                        "default_value": "",
+                        "other_choice": 0,
+                        "save_other_choice": 0,
+                        "allow_null": 0,
+                        "return_format": "value"
+                    },
+                    {
+                        "key": "field_66335bef7d553",
+                        "label": "提供価格（自動計算）",
+                        "name": "Menu_Product_Total_Price",
+                        "aria-label": "",
+                        "type": "number",
+                        "instructions": "",
+                        "required": false,
+                        "conditional_logic": false,
+                        "wrapper": {
+                            "width": "60",
+                            "class": "change-none",
+                            "id": ""
+                        },
+                        "default_value": "",
+                        "min": "",
+                        "max": "",
+                        "step": "",
+                        "placeholder": "",
+                        "prepend": "",
+                        "append": ""
+                    },
+                    {
+                        "key": "field_668f5bbf953a6",
+                        "label": "提供価格（自動計算）※イコライザー",
+                        "name": "Menu_Product_Total_Price_Equalizer",
+                        "aria-label": "",
+                        "type": "number",
+                        "instructions": "",
+                        "required": false,
+                        "conditional_logic": false,
+                        "wrapper": {
+                            "width": "60",
+                            "class": "display-none",
+                            "id": ""
+                        },
+                        "default_value": "",
+                        "min": "",
+                        "max": "",
+                        "step": "",
+                        "placeholder": "",
+                        "prepend": "",
+                        "append": ""
+                    }
+                ]
+            },
+            {
+                "key": "field_65419984d05a9",
+                "label": "メーカー希望小売価格",
+                "name": "Menu_Product_MSRP_Group",
+                "aria-label": "",
+                "type": "group",
+                "instructions": "",
+                "required": false,
+                "conditional_logic": false,
+                "wrapper": {
+                    "width": "50",
+                    "class": "",
+                    "id": ""
+                },
+                "layout": "table",
+                "sub_fields": [
+                    {
+                        "key": "field_65419984d05aa",
+                        "label": "消費税",
+                        "name": "Menu_Product_MSRP_Tax",
+                        "aria-label": "",
+                        "type": "radio",
+                        "instructions": "",
+                        "required": false,
+                        "conditional_logic": false,
+                        "wrapper": {
+                            "width": "20",
+                            "class": "",
+                            "id": ""
+                        },
+                        "choices": {
+                            "1": "税込",
+                            "2": "税抜"
+                        },
+                        "layout": "vertical",
+                        "default_value": "",
+                        "other_choice": 0,
+                        "save_other_choice": 0,
+                        "allow_null": 0,
+                        "return_format": "value"
+                    },
+                    {
+                        "key": "field_65419984d05ab",
+                        "label": "メーカー希望小売価格",
+                        "name": "Menu_Product_MSRP_Cost",
+                        "aria-label": "",
+                        "type": "number",
+                        "instructions": "",
+                        "required": false,
+                        "conditional_logic": false,
+                        "wrapper": {
+                            "width": "60",
+                            "class": "",
+                            "id": ""
+                        },
+                        "default_value": "",
+                        "min": "",
+                        "max": "",
+                        "step": "",
+                        "placeholder": "",
+                        "prepend": "",
+                        "append": ""
+                    },
+                    {
+                        "key": "field_65419984d05ac",
+                        "label": "〜表示",
+                        "name": "Menu_Product_MSRP_At",
+                        "aria-label": "",
+                        "type": "true_false",
+                        "instructions": "",
+                        "required": false,
+                        "conditional_logic": false,
+                        "wrapper": {
+                            "width": "20",
+                            "class": "",
+                            "id": ""
+                        },
+                        "ui": 0,
+                        "default_value": 0,
+                        "message": "",
+                        "ui_on_text": "",
+                        "ui_off_text": ""
+                    }
+                ]
+            },
+            {
+                "key": "field_664ab5271de00",
+                "label": "価格内訳情報",
+                "name": "Menu_Price_Breakdown",
+                "aria-label": "",
+                "type": "group",
+                "instructions": "",
+                "required": false,
+                "conditional_logic": [
+                    [
+                        {
+                            "field": "field_653646fe07734",
+                            "operator": "==",
+                            "value": "2"
+                        }
+                    ]
+                ],
+                "wrapper": {
+                    "width": "50",
+                    "class": "",
+                    "id": ""
+                },
+                "layout": "table",
+                "sub_fields": [
+                    {
+                        "key": "field_664abb3e15fce",
+                        "label": "商品代",
+                        "name": "Menu_Price_Breakdown_Product__Cost",
+                        "aria-label": "",
+                        "type": "radio",
+                        "instructions": "",
+                        "required": false,
+                        "conditional_logic": false,
+                        "wrapper": {
+                            "width": "20",
+                            "class": "",
+                            "id": ""
+                        },
+                        "choices": {
+                            "1": "表示",
+                            "2": "非表示"
+                        },
+                        "layout": "vertical",
+                        "default_value": "",
+                        "other_choice": 0,
+                        "save_other_choice": 0,
+                        "allow_null": 0,
+                        "return_format": "value"
+                    },
+                    {
+                        "key": "field_664aba5c9db6c",
+                        "label": "%OFF",
+                        "name": "Menu_Price_Breakdown_Discount",
+                        "aria-label": "",
+                        "type": "radio",
+                        "instructions": "",
+                        "required": false,
+                        "conditional_logic": [
+                            [
+                                {
+                                    "field": "field_664abb3e15fce",
+                                    "operator": "==",
+                                    "value": "1"
+                                },
+                                {
+                                    "field": "field_662228bc0fe55",
+                                    "operator": "!=",
+                                    "value": "1"
+                                }
+                            ]
+                        ],
+                        "wrapper": {
+                            "width": "20",
+                            "class": "",
+                            "id": ""
+                        },
+                        "choices": {
+                            "1": "表示",
+                            "2": "非表示"
+                        },
+                        "layout": "vertical",
+                        "default_value": "",
+                        "other_choice": 0,
+                        "save_other_choice": 0,
+                        "allow_null": 0,
+                        "return_format": "value"
+                    },
+                    {
+                        "key": "field_664ab54f1de04",
+                        "label": "工事費",
+                        "name": "Menu_Price_Breakdown_Construction__Cost",
+                        "aria-label": "",
+                        "type": "radio",
+                        "instructions": "",
+                        "required": false,
+                        "conditional_logic": false,
+                        "wrapper": {
+                            "width": "20",
+                            "class": "",
+                            "id": ""
+                        },
+                        "choices": {
+                            "1": "表示",
+                            "2": "非表示"
+                        },
+                        "layout": "vertical",
+                        "default_value": "",
+                        "other_choice": 0,
+                        "save_other_choice": 0,
+                        "allow_null": 0,
+                        "return_format": "value"
+                    },
+                    {
+                        "key": "field_664adae274ce6",
+                        "label": "補助額",
+                        "name": "Menu_Price_Breakdown_Subsidy__Cost",
+                        "aria-label": "",
+                        "type": "radio",
+                        "instructions": "",
+                        "required": false,
+                        "conditional_logic": [
+                            [
+                                {
+                                    "field": "field_663b0b6d642e2",
+                                    "operator": "==",
+                                    "value": "1"
+                                }
+                            ]
+                        ],
+                        "wrapper": {
+                            "width": "20",
+                            "class": "",
+                            "id": ""
+                        },
+                        "choices": {
+                            "1": "表示",
+                            "2": "非表示"
+                        },
+                        "layout": "vertical",
+                        "default_value": "",
+                        "other_choice": 0,
+                        "save_other_choice": 0,
+                        "allow_null": 0,
+                        "return_format": "value"
+                    }
+                ]
+            },
+            {
+                "key": "field_653646fe07842",
+                "label": "価格備考",
+                "name": "Menu_Product_Price_Note",
+                "aria-label": "",
+                "type": "text",
+                "instructions": "",
+                "required": false,
+                "conditional_logic": false,
+                "wrapper": {
+                    "width": "50",
+                    "class": "",
+                    "id": ""
+                },
+                "default_value": "",
+                "maxlength": "",
+                "placeholder": "",
+                "prepend": "",
+                "append": ""
+            },
+            {
+                "key": "field_65cca42bc095e",
+                "label": "補助額",
+                "name": "Menu_Product_Subsidy_Group",
+                "aria-label": "",
+                "type": "group",
+                "instructions": "",
+                "required": false,
+                "conditional_logic": [
+                    [
+                        {
+                            "field": "field_672db320399a5",
+                            "operator": "==",
+                            "value": "1"
+                        }
+                    ]
+                ],
+                "wrapper": {
+                    "width": "100",
+                    "class": "",
+                    "id": ""
+                },
+                "layout": "table",
+                "sub_fields": [
+                    {
+                        "key": "field_65cca42bc0960",
+                        "label": "補助額",
+                        "name": "Menu_Product_Subsidy_Price",
+                        "aria-label": "",
+                        "type": "number",
+                        "instructions": "",
+                        "required": false,
+                        "conditional_logic": false,
+                        "wrapper": {
+                            "width": "30",
+                            "class": "",
+                            "id": ""
+                        },
+                        "default_value": "",
+                        "min": "",
+                        "max": "",
+                        "step": "",
+                        "placeholder": "",
+                        "prepend": "",
+                        "append": ""
+                    },
+                    {
+                        "key": "field_65cca42bc0961",
+                        "label": "〜表示",
+                        "name": "Menu_Product_Subsidy_At",
+                        "aria-label": "",
+                        "type": "true_false",
+                        "instructions": "",
+                        "required": false,
+                        "conditional_logic": false,
+                        "wrapper": {
+                            "width": "10",
+                            "class": "",
+                            "id": ""
+                        },
+                        "ui": 0,
+                        "default_value": 0,
+                        "message": "",
+                        "ui_on_text": "",
+                        "ui_off_text": ""
+                    },
+                    {
+                        "key": "field_663a15efaf6f0",
+                        "label": "補助額備考",
+                        "name": "Menu_Product_Subsidy_Text",
+                        "aria-label": "",
+                        "type": "textarea",
+                        "instructions": "",
+                        "required": false,
+                        "conditional_logic": [
+                            [
+                                {
+                                    "field": "field_663b0b6d642e2",
+                                    "operator": "==",
+                                    "value": "1"
+                                }
+                            ]
+                        ],
+                        "wrapper": {
+                            "width": "60",
+                            "class": "",
+                            "id": ""
+                        },
+                        "rows": 4,
+                        "new_lines": "br",
+                        "default_value": "",
+                        "maxlength": "",
+                        "placeholder": ""
+                    }
+                ]
+            },
+            {
+                "key": "field_6628daf7c1c76",
+                "label": "セール\/キャンペーン適用提供価格",
+                "name": "Menu_Campaign_Price_Group",
+                "aria-label": "",
+                "type": "group",
+                "instructions": "",
+                "required": false,
+                "conditional_logic": [
+                    [
+                        {
+                            "field": "field_672db320399a5",
+                            "operator": "!=empty"
+                        },
+                        {
+                            "field": "field_672db320399a5",
+                            "operator": "==empty"
+                        }
+                    ]
+                ],
+                "wrapper": {
+                    "width": "100",
+                    "class": "",
+                    "id": ""
+                },
+                "layout": "block",
+                "sub_fields": [
+                    {
+                        "key": "field_6628d62fbf4dd",
+                        "label": "専用ディスカウントバッジ表示",
+                        "name": "Menu_Campaign_Discount_Badge",
+                        "aria-label": "",
+                        "type": "radio",
+                        "instructions": "",
+                        "required": false,
+                        "conditional_logic": [
+                            [
+                                {
+                                    "field": "field_663b0b6d642e2",
+                                    "operator": "==",
+                                    "value": "2"
+                                }
+                            ]
+                        ],
+                        "wrapper": {
+                            "width": "20",
+                            "class": "",
+                            "id": ""
+                        },
+                        "choices": {
+                            "01": "%OFF",
+                            "02": "工事費コミコミ",
+                            "03": "円お得",
+                            "04": "非表示"
+                        },
+                        "layout": "vertical",
+                        "default_value": "",
+                        "other_choice": 0,
+                        "save_other_choice": 0,
+                        "allow_null": 0,
+                        "return_format": "value"
+                    },
+                    {
+                        "key": "field_6628d612bf4dc",
+                        "label": "価格比較対象",
+                        "name": "Menu_Campaign_Compare",
+                        "aria-label": "",
+                        "type": "radio",
+                        "instructions": "",
+                        "required": false,
+                        "conditional_logic": false,
+                        "wrapper": {
+                            "width": "20",
+                            "class": "",
+                            "id": ""
+                        },
+                        "choices": {
+                            "01": "提供価格",
+                            "02": "メーカー小売希望価格"
+                        },
+                        "layout": "vertical",
+                        "default_value": "",
+                        "other_choice": 0,
+                        "save_other_choice": 0,
+                        "allow_null": 0,
+                        "return_format": "value"
+                    },
+                    {
+                        "key": "field_6628daf7c1c77",
+                        "label": "消費税",
+                        "name": "Menu_Campaign_Price_Tax",
+                        "aria-label": "",
+                        "type": "radio",
+                        "instructions": "",
+                        "required": false,
+                        "conditional_logic": false,
+                        "wrapper": {
+                            "width": "10",
+                            "class": "",
+                            "id": ""
+                        },
+                        "choices": {
+                            "1": "税込",
+                            "2": "税抜"
+                        },
+                        "layout": "vertical",
+                        "default_value": "",
+                        "other_choice": 0,
+                        "save_other_choice": 0,
+                        "allow_null": 0,
+                        "return_format": "value"
+                    },
+                    {
+                        "key": "field_6628daf7c1c78",
+                        "label": "セール\/キャンペーン適用価格",
+                        "name": "Menu_Campaign_Price",
+                        "aria-label": "",
+                        "type": "number",
+                        "instructions": "",
+                        "required": false,
+                        "conditional_logic": false,
+                        "wrapper": {
+                            "width": "40",
+                            "class": "",
+                            "id": ""
+                        },
+                        "default_value": "",
+                        "min": "",
+                        "max": "",
+                        "step": "",
+                        "placeholder": "",
+                        "prepend": "",
+                        "append": ""
+                    },
+                    {
+                        "key": "field_6628daf7c1c79",
+                        "label": "〜表示",
+                        "name": "Menu_Campaign_At",
+                        "aria-label": "",
+                        "type": "true_false",
+                        "instructions": "",
+                        "required": false,
+                        "conditional_logic": false,
+                        "wrapper": {
+                            "width": "10",
+                            "class": "",
+                            "id": ""
+                        },
+                        "ui": 0,
+                        "default_value": 0,
+                        "message": "",
+                        "ui_on_text": "",
+                        "ui_off_text": ""
+                    }
+                ]
+            },
+            {
+                "key": "field_68c908b9acbd2",
+                "label": "シミューレション",
+                "name": "",
+                "aria-label": "",
+                "type": "tab",
+                "instructions": "",
+                "required": 0,
+                "conditional_logic": [
+                    [
+                        {
+                            "field": "field_672db320399a5",
+                            "operator": "!=empty"
+                        },
+                        {
+                            "field": "field_672db320399a5",
+                            "operator": "==empty"
+                        }
+                    ]
+                ],
+                "wrapper": {
+                    "width": "",
+                    "class": "",
+                    "id": ""
+                },
+                "placement": "top",
+                "endpoint": 0,
+                "selected": 0
+            },
+            {
+                "key": "field_68c908e5acbd3",
+                "label": "シミューレション",
+                "name": "slider",
+                "aria-label": "",
+                "type": "repeater",
+                "instructions": "",
+                "required": false,
+                "conditional_logic": [
+                    [
+                        {
+                            "field": "field_672db320399a5",
+                            "operator": "!=empty"
+                        },
+                        {
+                            "field": "field_672db320399a5",
+                            "operator": "==empty"
+                        }
+                    ]
+                ],
+                "wrapper": {
+                    "width": "",
+                    "class": "",
+                    "id": ""
+                },
+                "layout": "table",
+                "button_label": "行を追加",
+                "min": 0,
+                "max": 0,
+                "rows_per_page": 20,
+                "collapsed": "",
+                "sub_fields": [
+                    {
+                        "key": "field_68c90948acbd4",
+                        "label": "画像",
+                        "name": "slider__item",
+                        "aria-label": "",
+                        "type": "image",
+                        "instructions": "",
+                        "required": false,
+                        "conditional_logic": false,
+                        "wrapper": {
+                            "width": "",
+                            "class": "",
+                            "id": ""
+                        },
+                        "return_format": "array",
+                        "preview_size": "medium",
+                        "library": "all",
+                        "min_width": 0,
+                        "min_height": 0,
+                        "min_size": 0,
+                        "max_width": 0,
+                        "max_height": 0,
+                        "max_size": 0,
+                        "mime_types": "",
+                        "parent_repeater": "field_68c908e5acbd3"
+                    }
+                ]
+            }
+        ],
+        "location": [
+            [
+                {
+                    "param": "post_type",
+                    "operator": "==",
+                    "value": "menu"
+                }
+            ]
+        ],
+        "menu_order": 0,
+        "position": "normal",
+        "style": "seamless",
+        "label_placement": "top",
+        "instruction_placement": "label",
+        "hide_on_screen": "",
+        "active": true,
+        "description": "",
+        "show_in_rest": 0,
+        "display_title": "",
+        "allow_ai_access": false,
+        "ai_description": ""
+    }
+]

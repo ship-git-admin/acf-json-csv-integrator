@@ -769,14 +769,25 @@ class AJCI_Import_Post_Helper
             // ①c ドメインや年月パス、拡張子が違っても、ファイル名が同じ既存メディアがあれば紐付け + 強制修復
             $basename = pathinfo(parse_url($url, PHP_URL_PATH), PATHINFO_FILENAME);
             if ($basename) {
-                $query = new WP_Query(array(
-                    'post_type'      => 'attachment',
-                    'post_status'    => 'inherit',
-                    'posts_per_page' => 1,
-                    'title'          => sanitize_file_name($basename),
-                ));
-                if ($query->have_posts()) {
-                    $found_id = $query->posts[0]->ID;
+                // SQLで _wp_attached_file と post_name を直接検索して確実に見つけ出す
+                $found_id = $wpdb->get_var($wpdb->prepare("
+                    SELECT post_id 
+                    FROM $wpdb->postmeta 
+                    WHERE meta_key = '_wp_attached_file' AND meta_value LIKE %s
+                    LIMIT 1
+                ", '%' . $wpdb->esc_like($basename) . '%'));
+
+                if (!$found_id) {
+                    $found_id = $wpdb->get_var($wpdb->prepare("
+                        SELECT ID 
+                        FROM $wpdb->posts 
+                        WHERE post_type = 'attachment' AND (post_name = %s OR post_title = %s)
+                        LIMIT 1
+                    ", sanitize_title($basename), sanitize_file_name($basename)));
+                }
+
+                if ($found_id) {
+                    $found_id = (int) $found_id;
                     if ($old_id) {
                         update_post_meta($found_id, '_really_simple_csv_importer_old_id', $old_id);
                     }
@@ -1111,6 +1122,28 @@ class AJCI_Import_Post_Helper
         $file = $this->remoteGet($url);
         if (!$file || !file_exists($file)) {
             return false;
+        }
+
+        // 古いWebPファイルが存在する場合は物理的に削除（WebP変換処理がスキップされるのを防ぐため）
+        $old_file = get_attached_file($attachment_id);
+        if ($old_file) {
+            $old_webp = preg_replace('/\.(jpe?g|png)$/i', '.webp', $old_file);
+            if (file_exists($old_webp)) {
+                @unlink($old_webp);
+            }
+            $metadata = wp_get_attachment_metadata($attachment_id);
+            if (is_array($metadata) && isset($metadata['sizes'])) {
+                $dir = dirname($old_file);
+                foreach ($metadata['sizes'] as $size_info) {
+                    if (isset($size_info['file'])) {
+                        $thumb_file = $dir . '/' . $size_info['file'];
+                        $thumb_webp = preg_replace('/\.(jpe?g|png)$/i', '.webp', $thumb_file);
+                        if (file_exists($thumb_webp)) {
+                            @unlink($thumb_webp);
+                        }
+                    }
+                }
+            }
         }
 
         // 実ファイルをアタッチメントに紐付け直す
