@@ -891,6 +891,39 @@ class AJCI_Import_Post_Helper
       $filename       = sanitize_file_name($filename);
 
       $upload_dir     = wp_upload_dir();
+
+      // --- WebP競合を防ぐための拡張子無視ファイル名一意化処理 ---
+      $dest_dir = $upload_dir['path'];
+      $filename_only = pathinfo($filename, PATHINFO_FILENAME);
+      $ext_only = pathinfo($filename, PATHINFO_EXTENSION);
+
+      $new_filename = $filename;
+      $suffix = 1;
+
+      // ディレクトリ内に拡張子を無視して同じベース名を持つファイルが存在するかチェック
+      while (true) {
+        $pattern = $dest_dir . '/' . $filename_only . '.*';
+        $matches = glob($pattern);
+        if (empty($matches)) {
+          break; // 競合がなければOK
+        }
+
+        // 競合がある場合、ベース名に枝番を付与して再試行
+        $filename_only = pathinfo($filename, PATHINFO_FILENAME) . '-' . $suffix;
+        $new_filename = $filename_only . ($ext_only ? '.' . $ext_only : '');
+        $suffix++;
+      }
+
+      // もしファイル名が変更された場合、一時ファイルをリネーム
+      if ($new_filename !== $filename) {
+        $new_file = dirname($file) . '/' . $new_filename;
+        if (@rename($file, $new_file)) {
+          $file = $new_file;
+          $filename = $new_filename;
+        }
+      }
+      // -----------------------------------------------------
+
       $guid           = $upload_dir['baseurl'] . '/' . _wp_relative_upload_path($file);
 
       $attachment = array_merge(array(
