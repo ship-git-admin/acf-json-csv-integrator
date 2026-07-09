@@ -241,6 +241,36 @@ class AJCI_CSV_Importer extends WP_Importer {
 	*/
 	public function save_post($post,$meta,$terms,$thumbnail,$is_update) {
 		
+		// 移行元URLが設定されている場合、コンテンツ内のドメインを置換する
+		$origin_url = AJCI_Import_Post_Helper::$import_origin_url;
+		if (!empty($origin_url)) {
+			$origin_host = parse_url($origin_url, PHP_URL_HOST);
+			$current_host = parse_url(home_url(), PHP_URL_HOST);
+			if ($origin_host && $current_host && $origin_host !== $current_host) {
+				$replace_domain = function($data) use ($origin_host, $current_host, &$replace_domain) {
+					if (is_array($data)) {
+						foreach ($data as $k => $v) {
+							$data[$k] = $replace_domain($v);
+						}
+					} elseif (is_string($data)) {
+						$data = str_ireplace(
+							array('http://' . $origin_host, 'https://' . $origin_host),
+							array('http://' . $current_host, 'https://' . $current_host),
+							$data
+						);
+						$data = str_ireplace($origin_host, $current_host, $data);
+					}
+					return $data;
+				};
+
+				$post = $replace_domain($post);
+				$meta = $replace_domain($meta);
+				if (!empty($thumbnail)) {
+					$thumbnail = $replace_domain($thumbnail);
+				}
+			}
+		}
+
 		// Separate the post tags from $post array
 		if (isset($post['post_tags']) && !empty($post['post_tags'])) {
 			$post_tags = $post['post_tags'];
