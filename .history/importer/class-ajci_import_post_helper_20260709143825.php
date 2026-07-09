@@ -766,29 +766,21 @@ class AJCI_Import_Post_Helper
         return (int) $existing_id;
       }
 
-      // ①c 年月パスとファイル名、および拡張子が一致する既存メディアがあれば紐付け + 強制修復
+      // ①c ドメインや拡張子が違っても、年月パスとファイル名が同じ既存メディアがあれば紐付け + 強制修復
       $pos = strpos($url, '/wp-content/uploads/');
       if ($pos !== false) {
         $relative_path = substr($url, $pos + strlen('/wp-content/uploads/'));
+        // 拡張子を除去（例: 2026/05/c6a6698d17ceba83dcaa52b704c51d62）
+        $path_no_ext = preg_replace('/\.(jpe?g|png|gif|webp)$/i', '', $relative_path);
 
-        if (!empty($relative_path)) {
-          // jpeg/jpg の表記揺れに対応するため、検索パターンを作成
-          $paths_to_check = array($relative_path);
-          if (preg_match('/\.jpe?g$/i', $relative_path)) {
-            $paths_to_check[] = preg_replace('/\.jpe?g$/i', '.jpg', $relative_path);
-            $paths_to_check[] = preg_replace('/\.jpe?g$/i', '.jpeg', $relative_path);
-          }
-          $paths_to_check = array_unique($paths_to_check);
+        if (!empty($path_no_ext)) {
+          // SQLで _wp_attached_file が 年月パス/ファイル名 で始まるものを取得
+          $found_ids = $wpdb->get_col($wpdb->prepare("
+                        SELECT DISTINCT post_id 
+                        FROM $wpdb->postmeta 
+                        WHERE meta_key = '_wp_attached_file' AND meta_value LIKE %s
+                    ", $wpdb->esc_like($path_no_ext) . '%'));
 
-          // プレースホルダーとクエリの作成
-          $placeholders = implode(',', array_fill(0, count($paths_to_check), '%s'));
-          $query = $wpdb->prepare("
-            SELECT DISTINCT post_id 
-            FROM $wpdb->postmeta 
-            WHERE meta_key = '_wp_attached_file' AND meta_value IN ($placeholders)
-          ", $paths_to_check);
-
-          $found_ids = $wpdb->get_col($query);
           $all_found_ids = array_unique((array)$found_ids);
 
           if (!empty($all_found_ids)) {
@@ -798,7 +790,7 @@ class AJCI_Import_Post_Helper
               if ($old_id) {
                 update_post_meta($fid, '_really_simple_csv_importer_old_id', $old_id);
               }
-              $this->repairAttachment($fid, $url); // 拡張子が一致する正しい画像のみを修復
+              $this->repairAttachment($fid, $url); // 正しい年月フォルダの画像のみを修復
               if (!$return_id) {
                 $return_id = $fid;
               }
