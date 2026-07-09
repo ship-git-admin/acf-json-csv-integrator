@@ -766,37 +766,37 @@ class AJCI_Import_Post_Helper
                 return (int) $existing_id;
             }
 
-            // ①c ドメインや年月パス、拡張子が違っても、ファイル名が同じ既存メディアがあれば紐付け + 強制修復
-            $basename = pathinfo(parse_url($url, PHP_URL_PATH), PATHINFO_FILENAME);
-            if ($basename) {
-                // SQLで _wp_attached_file と post_name を直接検索して一致するすべてのIDを取得
-                $found_ids = $wpdb->get_col($wpdb->prepare("
-                    SELECT DISTINCT post_id 
-                    FROM $wpdb->postmeta 
-                    WHERE meta_key = '_wp_attached_file' AND meta_value LIKE %s
-                ", '%' . $wpdb->esc_like($basename) . '%'));
+            // ①c ドメインや拡張子が違っても、年月パスとファイル名が同じ既存メディアがあれば紐付け + 強制修復
+            $pos = strpos($url, '/wp-content/uploads/');
+            if ($pos !== false) {
+                $relative_path = substr($url, $pos + strlen('/wp-content/uploads/'));
+                // 拡張子を除去（例: 2026/05/c6a6698d17ceba83dcaa52b704c51d62）
+                $path_no_ext = preg_replace('/\.(jpe?g|png|gif|webp)$/i', '', $relative_path);
 
-                $post_ids = $wpdb->get_col($wpdb->prepare("
-                    SELECT ID 
-                    FROM $wpdb->posts 
-                    WHERE post_type = 'attachment' AND (post_name = %s OR post_title = %s)
-                ", sanitize_title($basename), sanitize_file_name($basename)));
+                if (!empty($path_no_ext)) {
+                    // SQLで _wp_attached_file が 年月パス/ファイル名 で始まるものを取得
+                    $found_ids = $wpdb->get_col($wpdb->prepare("
+                        SELECT DISTINCT post_id 
+                        FROM $wpdb->postmeta 
+                        WHERE meta_key = '_wp_attached_file' AND meta_value LIKE %s
+                    ", $wpdb->esc_like($path_no_ext) . '%'));
 
-                $all_found_ids = array_unique(array_merge((array)$found_ids, (array)$post_ids));
+                    $all_found_ids = array_unique((array)$found_ids);
 
-                if (!empty($all_found_ids)) {
-                    $return_id = 0;
-                    foreach ($all_found_ids as $fid) {
-                        $fid = (int) $fid;
-                        if ($old_id) {
-                            update_post_meta($fid, '_really_simple_csv_importer_old_id', $old_id);
+                    if (!empty($all_found_ids)) {
+                        $return_id = 0;
+                        foreach ($all_found_ids as $fid) {
+                            $fid = (int) $fid;
+                            if ($old_id) {
+                                update_post_meta($fid, '_really_simple_csv_importer_old_id', $old_id);
+                            }
+                            $this->repairAttachment($fid, $url); // 正しい年月フォルダの画像のみを修復
+                            if (!$return_id) {
+                                $return_id = $fid;
+                            }
                         }
-                        $this->repairAttachment($fid, $url);
-                        if (!$return_id) {
-                            $return_id = $fid;
-                        }
+                        return $return_id;
                     }
-                    return $return_id;
                 }
             }
 
