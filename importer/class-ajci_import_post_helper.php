@@ -769,30 +769,34 @@ class AJCI_Import_Post_Helper
             // ①c ドメインや年月パス、拡張子が違っても、ファイル名が同じ既存メディアがあれば紐付け + 強制修復
             $basename = pathinfo(parse_url($url, PHP_URL_PATH), PATHINFO_FILENAME);
             if ($basename) {
-                // SQLで _wp_attached_file と post_name を直接検索して確実に見つけ出す
-                $found_id = $wpdb->get_var($wpdb->prepare("
-                    SELECT post_id 
+                // SQLで _wp_attached_file と post_name を直接検索して一致するすべてのIDを取得
+                $found_ids = $wpdb->get_col($wpdb->prepare("
+                    SELECT DISTINCT post_id 
                     FROM $wpdb->postmeta 
                     WHERE meta_key = '_wp_attached_file' AND meta_value LIKE %s
-                    LIMIT 1
                 ", '%' . $wpdb->esc_like($basename) . '%'));
 
-                if (!$found_id) {
-                    $found_id = $wpdb->get_var($wpdb->prepare("
-                        SELECT ID 
-                        FROM $wpdb->posts 
-                        WHERE post_type = 'attachment' AND (post_name = %s OR post_title = %s)
-                        LIMIT 1
-                    ", sanitize_title($basename), sanitize_file_name($basename)));
-                }
+                $post_ids = $wpdb->get_col($wpdb->prepare("
+                    SELECT ID 
+                    FROM $wpdb->posts 
+                    WHERE post_type = 'attachment' AND (post_name = %s OR post_title = %s)
+                ", sanitize_title($basename), sanitize_file_name($basename)));
 
-                if ($found_id) {
-                    $found_id = (int) $found_id;
-                    if ($old_id) {
-                        update_post_meta($found_id, '_really_simple_csv_importer_old_id', $old_id);
+                $all_found_ids = array_unique(array_merge((array)$found_ids, (array)$post_ids));
+
+                if (!empty($all_found_ids)) {
+                    $return_id = 0;
+                    foreach ($all_found_ids as $fid) {
+                        $fid = (int) $fid;
+                        if ($old_id) {
+                            update_post_meta($fid, '_really_simple_csv_importer_old_id', $old_id);
+                        }
+                        $this->repairAttachment($fid, $url);
+                        if (!$return_id) {
+                            $return_id = $fid;
+                        }
                     }
-                    $this->repairAttachment($found_id, $url);
-                    return $found_id;
+                    return $return_id;
                 }
             }
 
@@ -1127,20 +1131,16 @@ class AJCI_Import_Post_Helper
         // 古いWebPファイルが存在する場合は物理的に削除（WebP変換処理がスキップされるのを防ぐため）
         $old_file = get_attached_file($attachment_id);
         if ($old_file) {
-            $old_webp = preg_replace('/\.(jpe?g|png)$/i', '.webp', $old_file);
-            if (file_exists($old_webp)) {
-                @unlink($old_webp);
-            }
-            $metadata = wp_get_attachment_metadata($attachment_id);
-            if (is_array($metadata) && isset($metadata['sizes'])) {
-                $dir = dirname($old_file);
-                foreach ($metadata['sizes'] as $size_info) {
-                    if (isset($size_info['file'])) {
-                        $thumb_file = $dir . '/' . $size_info['file'];
-                        $thumb_webp = preg_replace('/\.(jpe?g|png)$/i', '.webp', $thumb_file);
-                        if (file_exists($thumb_webp)) {
-                            @unlink($thumb_webp);
-                        }
+            $dir = dirname($old_file);
+            $basename_only = pathinfo($old_file, PATHINFO_FILENAME);
+            
+            // 同じベース名を持つすべてのWebPファイルを一括検索して物理削除（サイズ違いも根こそぎ削除）
+            $webp_pattern = $dir . '/' . $basename_only . '*.webp';
+            $matched_webps = glob($webp_pattern);
+            if (is_array($matched_webps)) {
+                foreach ($matched_webps as $webp_file) {
+                    if (file_exists($webp_file)) {
+                        @unlink($webp_file);
                     }
                 }
             }
