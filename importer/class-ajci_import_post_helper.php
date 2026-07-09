@@ -1169,14 +1169,54 @@ class AJCI_Import_Post_Helper
       return false;
     }
 
-    // 古いWebPファイルが存在する場合は物理的に削除（WebP変換処理がスキップされるのを防ぐため）
     $old_file = get_attached_file($attachment_id);
-    if ($old_file) {
-      $dir = dirname($old_file);
-      $basename_only = pathinfo($old_file, PATHINFO_FILENAME);
+    $final_file = $file;
 
-      // 同じベース名を持つすべてのWebPファイルを一括検索して物理削除（サイズ違いも根こそぎ削除）
-      $webp_pattern = $dir . '/' . $basename_only . '*.webp';
+    if ($old_file) {
+      $dest_dir = dirname($old_file);
+      $old_basename = pathinfo($old_file, PATHINFO_FILENAME);
+      $old_ext = pathinfo($old_file, PATHINFO_EXTENSION);
+      
+      $is_conflict = false;
+      
+      // ディレクトリ内の同じベース名を持つすべてのファイルをスキャン
+      $pattern = $dest_dir . '/' . $old_basename . '.*';
+      $matches = glob($pattern);
+      if (is_array($matches)) {
+        foreach ($matches as $match) {
+          $match_ext = pathinfo($match, PATHINFO_EXTENSION);
+          // 自分自身の元の拡張子 (例: .jpg) 以外の拡張子違いファイルが存在する場合、競合とみなす
+          if (strtolower($match_ext) !== strtolower($old_ext) && strtolower($match_ext) !== 'tmp') {
+            $is_conflict = true;
+            break;
+          }
+        }
+      }
+
+      // 競合している場合、一意な新しいファイル名を決定してリネームする
+      if ($is_conflict) {
+        $new_basename = $old_basename;
+        $suffix = 1;
+        while (true) {
+          $check_pattern = $dest_dir . '/' . $new_basename . '.*';
+          $check_matches = glob($check_pattern);
+          if (empty($check_matches)) {
+            break;
+          }
+          $new_basename = $old_basename . '-' . $suffix;
+          $suffix++;
+        }
+        
+        $new_filename = $new_basename . ($old_ext ? '.' . $old_ext : '');
+        $new_dest_file = $dest_dir . '/' . $new_filename;
+        
+        if (@rename($file, $new_dest_file)) {
+          $final_file = $new_dest_file;
+        }
+      }
+
+      // --- 古い関連WebPファイルを一括物理削除 ---
+      $webp_pattern = $dest_dir . '/' . $old_basename . '*.webp';
       $matched_webps = glob($webp_pattern);
       if (is_array($matched_webps)) {
         foreach ($matched_webps as $webp_file) {
@@ -1188,10 +1228,10 @@ class AJCI_Import_Post_Helper
     }
 
     // 実ファイルをアタッチメントに紐付け直す
-    update_attached_file($attachment_id, $file);
+    update_attached_file($attachment_id, $final_file);
 
     // MIMEタイプを補正
-    $filetype = wp_check_filetype(basename($file));
+    $filetype = wp_check_filetype(basename($final_file));
     if (!empty($filetype['type'])) {
       wp_update_post(array(
         'ID'             => $attachment_id,
@@ -1200,11 +1240,16 @@ class AJCI_Import_Post_Helper
     }
 
     // サムネイル等のメタデータを生成
-    $metadata = wp_generate_attachment_metadata($attachment_id, $file);
+    $metadata = wp_generate_attachment_metadata($attachment_id, $final_file);
     if (!is_wp_error($metadata) && $metadata) {
       wp_update_attachment_metadata($attachment_id, $metadata);
     }
     update_post_meta($attachment_id, '_source_url', $url);
+
+    // 一時ファイルが残っていれば削除
+    if ($final_file !== $file && file_exists($file)) {
+      @unlink($file);
+    }
 
     return true;
   }
