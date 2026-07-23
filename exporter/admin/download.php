@@ -5,7 +5,7 @@ if (
   is_user_logged_in() &&
   isset($_POST['_wpnonce']) &&
   wp_verify_nonce($_POST['_wpnonce'], 'csv_exporter') &&
-  (current_user_can('administrator') || current_user_can('editor'))
+  current_user_can('manage_options')
 ) {
   check_admin_referer('csv_exporter');
 
