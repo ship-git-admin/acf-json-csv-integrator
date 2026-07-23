@@ -786,6 +786,9 @@ class AJCI_CSV_Importer extends WP_Importer {
 	}
 	// dispatcher
 	function dispatch() {
+		if (!current_user_can('manage_options')) {
+			wp_die(__('Permission denied'));
+		}
 		$this->header();
 		
 		if (empty ($_GET['step']))
@@ -819,6 +822,9 @@ add_action( 'init', 'really_simple_csv_importer_load_textdomain' );
 
 // インポーターを admin_init で登録（init 後なので翻訳が確実に読み込まれた後に実行される）
 function really_simple_csv_importer() {
+    if (!current_user_can('manage_options')) {
+        return;
+    }
     $rs_csv_importer = new AJCI_CSV_Importer();
     register_importer('csv', __('CSV', 'really-simple-csv-importer'), __('Import posts, categories, tags, custom fields from simple csv file.', 'really-simple-csv-importer'), array ($rs_csv_importer, 'dispatch'));
 }
@@ -850,9 +856,9 @@ function ajci_csv_import_chunk_handler() {
 		require_once(ABSPATH . 'wp-admin/includes/file.php');
 		require_once(ABSPATH . 'wp-admin/includes/media.php');
 
-		if (!current_user_can('import')) {
-		wp_send_json_error('Permission denied');
-	}
+		if (!current_user_can('manage_options')) {
+			wp_send_json_error('Permission denied');
+		}
 
 	$attachment_id = isset($_POST['attachment_id']) ? (int) $_POST['attachment_id'] : 0;
 	$offset = isset($_POST['offset']) ? (int) $_POST['offset'] : 1;
@@ -944,7 +950,7 @@ function ajci_csv_import_chunk_handler() {
 
 add_action('wp_ajax_ajci_csv_import_cleanup', 'ajci_csv_import_cleanup_handler');
 function ajci_csv_import_cleanup_handler() {
-	if (!current_user_can('import')) wp_send_json_error('Permission denied');
+	if (!current_user_can('manage_options')) wp_send_json_error('Permission denied');
 	$attachment_id = isset($_POST['attachment_id']) ? (int) $_POST['attachment_id'] : 0;
 	if ($attachment_id) {
 		wp_import_cleanup($attachment_id);

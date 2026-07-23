@@ -2,6 +2,9 @@
 
 An integrated tool to export and import ACF (Advanced Custom Fields) flexible content and repeaters seamlessly as JSON-formatted strings via CSV.
 
+### 1.0.36 (2026-07-23)
+- セキュリティ・権限の制限: インポートおよびエクスポート機能の実行権限を管理者（`manage_options` 権限保持者）限定に厳格化。編集者（Editor）等の非管理者ユーザーの管理メニュー（ツール内の「CSV Export」および「ツール」→「インポート」内の「CSV」）には非表示とし、ダイレクトアクセスやAJAXリクエストも拒否するよう改修。
+
 ### 1.0.35 (2026-07-09)
 - 新機能: インポートするコンテンツ本文（`post_content`）や、ACFなどの各種メタデータに含まれるテスト環境の仮アドレス（`kawayou-reform-com.check-xserver.jp` 等）を、現在のサイトドメイン（`home_url()`）にインポート時に自動で一括置換する機能を追加。これにより、本文中に埋め込まれていた仮アドレスの画像リンク等のリンク切れ（画像の欠損）が自動修復されます。
 

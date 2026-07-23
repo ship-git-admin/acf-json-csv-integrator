@@ -68,7 +68,7 @@ class WP_CSV_Exporter extends WCEBase
    */
   public function admin_menu()
   {
-    add_submenu_page('tools.php', $this->_('CSV Export', 'CSVエクスポート'), $this->_('CSV Export', 'CSVエクスポート'), 'level_7', WCE_PLUGIN_NAME, array(&$this, 'show_options_page',));
+    add_submenu_page('tools.php', $this->_('CSV Export', 'CSVエクスポート'), $this->_('CSV Export', 'CSVエクスポート'), 'manage_options', WCE_PLUGIN_NAME, array(&$this, 'show_options_page',));
   }
 
   /**
@@ -76,6 +76,9 @@ class WP_CSV_Exporter extends WCEBase
    */
   public function show_options_page()
   {
+    if (!current_user_can('manage_options')) {
+      wp_die('Permission denied');
+    }
     require_once WCE_PLUGIN_DIR . '/admin/index.php';
   }
 
