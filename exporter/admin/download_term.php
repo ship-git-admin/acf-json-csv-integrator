@@ -48,6 +48,48 @@ if (
     } else {
       $results = array();
 
+      // ACFの画像・ファイルIDを、移行先で取得できる画像URLへ変換する。
+      // タームの柔軟コンテンツ／リピーターは配列のまま返るため、再帰的に処理する。
+      $export_convert_images = function ($data, $field_key_or_name, $parent_type = '') use (&$export_convert_images) {
+        if (is_array($data)) {
+          $current_type = '';
+          if (function_exists('acf_get_field') && !is_numeric($field_key_or_name)) {
+            $field_info = acf_get_field($field_key_or_name);
+            if (is_array($field_info) && isset($field_info['type'])) {
+              $current_type = $field_info['type'];
+            }
+          }
+
+          foreach ($data as $key => $value) {
+            $data[$key] = $export_convert_images(
+              $value,
+              $key,
+              $current_type ? $current_type : $parent_type
+            );
+          }
+        } elseif ($data && (is_numeric($data) || is_int($data))) {
+          $is_image_field = false;
+
+          if ($parent_type === 'gallery' || $parent_type === 'image' || $parent_type === 'file') {
+            $is_image_field = true;
+          } elseif (function_exists('acf_get_field') && !is_numeric($field_key_or_name)) {
+            $field_info = acf_get_field($field_key_or_name);
+            if (is_array($field_info) && isset($field_info['type'])) {
+              $is_image_field = ($field_info['type'] === 'image' || $field_info['type'] === 'file');
+            }
+          }
+
+          if ($is_image_field) {
+            $url = wp_get_attachment_url((int) $data);
+            if ($url) {
+              $data = $url;
+            }
+          }
+        }
+
+        return $data;
+      };
+
       foreach ($terms as $term) {
         $row = array();
 
@@ -71,24 +113,27 @@ if (
             $acf_value = get_field($field_name, 'term_' . $term->term_id, false);
 
             if ($acf_value !== null && $acf_value !== false) {
+              // 画像IDをURLへ変換してからCSVへ書き出す。
+              $acf_value = $export_convert_images($acf_value, $field_name);
               if (is_array($acf_value)) {
                 // 配列（リピーター・フレキシブルコンテンツ等）は JSON 文字列に変換
-                $field_value = json_encode($acf_value, JSON_UNESCAPED_UNICODE);
+                $field_value = json_encode($acf_value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
               } else {
                 $field_value = $acf_value;
               }
             } else {
               // ACF で値が取れない場合は直接 term_meta から取得
               $raw = get_term_meta($term->term_id, $field_name, true);
+              $raw = $export_convert_images($raw, $field_name);
               $field_value = is_array($raw)
-                ? json_encode($raw, JSON_UNESCAPED_UNICODE)
+                ? json_encode($raw, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
                 : (string) $raw;
             }
           } else {
             // ACF 未インストール時：直接 term_meta から取得
             $raw = get_term_meta($term->term_id, $field_name, true);
             $field_value = is_array($raw)
-              ? json_encode($raw, JSON_UNESCAPED_UNICODE)
+              ? json_encode($raw, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
               : (string) $raw;
           }
 
