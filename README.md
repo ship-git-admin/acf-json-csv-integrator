@@ -2,6 +2,10 @@
 
 An integrated tool to export and import ACF (Advanced Custom Fields) flexible content and repeaters seamlessly as JSON-formatted strings via CSV.
 
+### 1.0.37 (2026-09-02)
+- 修正: タームの柔軟コンテンツ・リピーター内にあるACF画像／ファイルIDを、エクスポート時に移行可能なURLへ変換するよう改修。
+- 修正: CSVインポート時、画像取得前に移行先ドメインへ置換して404になる問題を修正。JSON内URLの正規化、リダイレクト、2xxレスポンスにも対応。
+
 ### 1.0.36 (2026-07-23)
 - セキュリティ・権限の制限: インポートおよびエクスポート機能の実行権限を管理者（`manage_options` 権限保持者）限定に厳格化。編集者（Editor）等の非管理者ユーザーの管理メニュー（ツール内の「CSV Export」および「ツール」→「インポート」内の「CSV」）には非表示とし、ダイレクトアクセスやAJAXリクエストも拒否するよう改修。
 
