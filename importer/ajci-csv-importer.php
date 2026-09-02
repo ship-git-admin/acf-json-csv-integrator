@@ -264,10 +264,9 @@ class AJCI_CSV_Importer extends WP_Importer {
 				};
 
 				$post = $replace_domain($post);
-				$meta = $replace_domain($meta);
-				if (!empty($thumbnail)) {
-					$thumbnail = $replace_domain($thumbnail);
-				}
+				// ACFメタとサムネイルには移行元の画像URLが含まれるため、
+				// 画像のダウンロード・メディアID変換が完了する前にドメインを置換しない。
+				// ここで置換すると、移行先の未登録URLを取得して404になる。
 			}
 		}
 
@@ -297,7 +296,8 @@ class AJCI_CSV_Importer extends WP_Importer {
 		}
 		
 		// Set meta data
-		$h->setMeta($meta);
+		// 画像URLは移行元のまま処理し、画像以外の文字列だけドメインを置換する。
+		$h->setMeta($meta, isset($replace_domain) ? $replace_domain : null);
 		
 		// Set terms
 		foreach ($terms as $key => $value) {

@@ -389,12 +389,14 @@ class AJCI_Import_Post_Helper
    * Set meta fields by array
    *
    * @param (array) $data An associative array of metadata
+   * @param (callable|null) $replace_domain Optional callback for replacing domains in non-media values.
    */
-  public function setMeta($data)
+  public function setMeta($data, $replace_domain = null)
   {
     if (empty($data) || !is_array($data)) {
       return;
     }
+    $replace_domain = is_callable($replace_domain) ? $replace_domain : null;
     $scf_array = array();
     foreach ($data as $key => $value) {
       $is_cfs = 0;
@@ -427,7 +429,11 @@ class AJCI_Import_Post_Helper
           if (strpos($key, 'field_') === 0) {
             $fobj = get_field_object($key);
             if (is_array($fobj) && isset($fobj['key']) && $fobj['key'] == $key) {
-              if (isset($fobj['type']) && ($fobj['type'] === 'image' || $fobj['type'] === 'file')) {
+              $is_media_field = isset($fobj['type']) && ($fobj['type'] === 'image' || $fobj['type'] === 'file');
+              if ($is_media_field) {
+                if (is_string($value)) {
+                  $value = $this->normalizeRemoteUrl($value);
+                }
                 if (is_string($value) && filter_var($value, FILTER_VALIDATE_URL)) {
                   $attachment_id = $this->addMediaFile($value);
                   if ($attachment_id) {
@@ -440,6 +446,11 @@ class AJCI_Import_Post_Helper
                   }
                 }
               }
+              // メディアフィールドは移行元URLを保持して取得処理へ渡す。
+              // それ以外の値だけ、既存のドメイン置換を適用する。
+              if (!$is_media_field && $replace_domain) {
+                $value = call_user_func($replace_domain, $value);
+              }
               $this->acfUpdateField($key, $value);
               $is_acf = 1;
             }
@@ -447,7 +458,8 @@ class AJCI_Import_Post_Helper
             $field_key = $this->getFieldKey($key);
             if (strpos($field_key, 'field_') === 0) {
               // 配列内の画像URLを自動でダウンロードしてメディア登録しIDに置換
-              $decoded_value = $this->processAcfArrayImages($decoded_value);
+              // ドメイン置換は画像の取得後に、画像以外の値だけへ適用する。
+              $decoded_value = $this->processAcfArrayImages($decoded_value, '', $replace_domain);
               // 正しいフィールドキーで保存（柔軟コンテンツ・リピーターを正しく格納）
               $this->acfUpdateField($field_key, $decoded_value);
             } elseif ($this->hasParentColumn($key, array_keys($data))) {
@@ -462,6 +474,9 @@ class AJCI_Import_Post_Helper
         }
       }
       if (!$is_acf && !$is_cfs && !$is_scf) {
+        if ($replace_domain) {
+          $value = call_user_func($replace_domain, $value);
+        }
         $this->updateMeta($key, $value);
       }
     }
@@ -473,23 +488,31 @@ class AJCI_Import_Post_Helper
    *
    * @param array  $array        ACFの配列データ
    * @param string $parent_type  親フィールドタイプ
+   * @param callable|null $replace_domain 非メディア値に適用するドメイン置換コールバック
    * @return array 処理後の配列データ
    */
-  public function processAcfArrayImages($array, $parent_type = '')
+  public function processAcfArrayImages($array, $parent_type = '', $replace_domain = null)
   {
     if (!is_array($array)) {
       return $array;
     }
+    $replace_domain = is_callable($replace_domain) ? $replace_domain : null;
+    $media_extensions = array('jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'zip');
 
     // 1. もしこの配列自体がACFの「画像オブジェクト（連想配列）」の構造を持っている場合
     // （例：array('ID' => 123, 'url' => 'https://...', 'sizes' => ...） の場合、
     // そのURLをダウンロードしてローカルアタッチメントID値に丸ごと置換する。
-    if (isset($array['url']) && filter_var($array['url'], FILTER_VALIDATE_URL)) {
-      $path_info = pathinfo(parse_url($array['url'], PHP_URL_PATH));
+    if (isset($array['url'])) {
+      $image_url = $this->normalizeRemoteUrl($array['url']);
+      if (filter_var($image_url, FILTER_VALIDATE_URL)) {
+        $path_info = pathinfo(parse_url($image_url, PHP_URL_PATH));
+      } else {
+        $path_info = array();
+      }
       if (isset($path_info['extension'])) {
         $ext = strtolower($path_info['extension']);
-        if (in_array($ext, array('jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'zip'))) {
-          $attachment_id = $this->addMediaFile($array['url']);
+        if (in_array($ext, $media_extensions, true)) {
+          $attachment_id = $this->addMediaFile($image_url);
           if ($attachment_id) {
             return $attachment_id;
           }
@@ -525,63 +548,76 @@ class AJCI_Import_Post_Helper
       }
 
       if (is_array($value)) {
-        $new_array[$new_key] = $this->processAcfArrayImages($value, $current_type ? $current_type : $parent_type);
-      } else {
-        $is_image_field = false;
+        $new_array[$new_key] = $this->processAcfArrayImages(
+          $value,
+          $current_type ? $current_type : $parent_type,
+          $replace_domain
+        );
+        continue;
+      }
 
-        // 親がギャラリー、画像、ファイル、またはこのフィールド自体が画像・ファイルの場合
-        if ($parent_type === 'gallery' || $parent_type === 'image' || $parent_type === 'file') {
-          $is_image_field = true;
-        } elseif ($current_type === 'image' || $current_type === 'file') {
-          $is_image_field = true;
-        }
+      $is_image_field = false;
 
-        // 数値または数値文字列（旧画像ID）の場合
-        if ($is_image_field && (is_numeric($value) || (is_string($value) && ctype_digit($value)))) {
-          $new_id = $this->resolveImageId($value);
-          if ($new_id) {
-            $new_array[$new_key] = $new_id;
-          } else {
-            // 解決できなかった場合も整数型で保持する（ACFの型互換性を維持）
-            $new_array[$new_key] = (int) $value;
-          }
+      // 親がギャラリー、画像、ファイル、またはこのフィールド自体が画像・ファイルの場合
+      if ($parent_type === 'gallery' || $parent_type === 'image' || $parent_type === 'file') {
+        $is_image_field = true;
+      } elseif ($current_type === 'image' || $current_type === 'file') {
+        $is_image_field = true;
+      }
+
+      // 数値または数値文字列（旧画像ID）の場合
+      if ($is_image_field && (is_numeric($value) || (is_string($value) && ctype_digit($value)))) {
+        $new_id = $this->resolveImageId($value);
+        if ($new_id) {
+          $new_array[$new_key] = $new_id;
+        } else {
+          // 解決できなかった場合も整数型で保持する（ACFの型互換性を維持）
+          $new_array[$new_key] = (int) $value;
         }
-        // URLの場合
-        elseif ($is_image_field && is_string($value) && filter_var($value, FILTER_VALIDATE_URL)) {
+        continue;
+      }
+
+      // CSVやJSONのエスケープが残っていても、URL判定前に正規化する。
+      $is_url = false;
+      if (is_string($value)) {
+        $normalized_value = $this->normalizeRemoteUrl($value);
+        if (filter_var($normalized_value, FILTER_VALIDATE_URL)) {
+          $value = $normalized_value;
+          $is_url = true;
+        }
+      }
+
+      // ACFの画像・ファイルフィールド、または拡張子で判定できるメディアURLを取得する。
+      // 取得に失敗した場合は移行元URLを保持し、移行先ドメインへ置換しない。
+      $media_attempted = false;
+      if ($is_url) {
+        $path_info = pathinfo(parse_url($value, PHP_URL_PATH));
+        $ext = isset($path_info['extension']) ? strtolower($path_info['extension']) : '';
+        if ($is_image_field || in_array($ext, $media_extensions, true)) {
+          $media_attempted = true;
           $attachment_id = $this->addMediaFile($value);
           if ($attachment_id) {
             $new_array[$new_key] = $attachment_id;
-          } else {
+            continue;
+          }
+
+          if ($is_image_field) {
             $found_id = attachment_url_to_postid($value);
             if ($found_id) {
               $new_array[$new_key] = $found_id;
-            } else {
-              $new_array[$new_key] = $value;
+              continue;
             }
           }
-        }
-        // フォールバック: 値が画像の拡張子を持つURLの場合
-        elseif (is_string($value) && filter_var($value, FILTER_VALIDATE_URL)) {
-          $path_info = pathinfo(parse_url($value, PHP_URL_PATH));
-          if (isset($path_info['extension'])) {
-            $ext = strtolower($path_info['extension']);
-            if (in_array($ext, array('jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'zip'))) {
-              $attachment_id = $this->addMediaFile($value);
-              if ($attachment_id) {
-                $new_array[$new_key] = $attachment_id;
-              } else {
-                $new_array[$new_key] = $value;
-              }
-            } else {
-              $new_array[$new_key] = $value;
-            }
-          } else {
-            $new_array[$new_key] = $value;
-          }
-        } else {
-          $new_array[$new_key] = $value;
         }
       }
+
+      // 画像取得前に移行先ドメインへ置換すると404になるため、
+      // 取得対象ではない値だけここで置換する。
+      if ($replace_domain && !$media_attempted) {
+        $value = call_user_func($replace_domain, $value);
+      }
+
+      $new_array[$new_key] = $value;
     }
 
     return $new_array;
@@ -733,8 +769,32 @@ class AJCI_Import_Post_Helper
     return null;
   }
 
+  /**
+   * Normalize a URL coming from CSV/JSON before validation or HTTP access.
+   *
+   * JSON may contain escaped slashes (https:\/\/example.com\/image.jpg),
+   * and CSV exports may retain surrounding quotes or HTML entities.
+   *
+   * @param mixed $url
+   * @return string
+   */
+  protected function normalizeRemoteUrl($url)
+  {
+    if (!is_string($url)) {
+      return '';
+    }
+
+    $url = trim($url);
+    $url = trim($url, " \t\n\r\0\x0B\"'");
+    $url = html_entity_decode($url, ENT_QUOTES, 'UTF-8');
+    $url = str_replace(array('\\/', '\\u002F', '\\u002f'), '/', $url);
+
+    return trim($url);
+  }
+
   public function addMediaFile($file, $data = null)
   {
+    $file = $this->normalizeRemoteUrl($file);
     $url = '';
     if (parse_url($file, PHP_URL_SCHEME)) {
       $url = $file;
@@ -970,6 +1030,7 @@ class AJCI_Import_Post_Helper
    */
   public function remoteGet($url, $args = array())
   {
+    $url = $this->normalizeRemoteUrl($url);
     global $wp_filesystem;
     if (!is_object($wp_filesystem)) {
       WP_Filesystem();
@@ -1004,13 +1065,22 @@ class AJCI_Import_Post_Helper
         $args['headers']['Authorization'] = 'Basic ' . base64_encode($user . ':' . $pass);
       }
 
+      // 移行元がリダイレクトを返す場合にも追従できるようにする。
+      if (!isset($args['timeout'])) {
+        $args['timeout'] = 30;
+      }
+      if (!isset($args['redirection'])) {
+        $args['redirection'] = 5;
+      }
+
       $response = wp_safe_remote_get($url, $args);
       if (is_wp_error($response)) {
         // wp_safe_remote_getがエラーの場合はwp_remote_getで再試行（ローカルIP制限対策）
         $response = wp_remote_get($url, $args);
       }
 
-      if (!is_wp_error($response) && isset($response['response']['code']) && $response['response']['code'] === 200) {
+      $status_code = !is_wp_error($response) ? wp_remote_retrieve_response_code($response) : 0;
+      if (!is_wp_error($response) && $status_code >= 200 && $status_code < 300) {
         $destination = wp_upload_dir();
         $filename = basename($url);
         $filepath = $destination['path'] . '/' . wp_unique_filename($destination['path'], $filename);
@@ -1025,7 +1095,7 @@ class AJCI_Import_Post_Helper
       } elseif (is_wp_error($response)) {
         $this->addError($response->get_error_code(), $response->get_error_message());
       } else {
-        $status_code = isset($response['response']['code']) ? $response['response']['code'] : 'Unknown';
+        $status_code = $status_code ? $status_code : 'Unknown';
         $this->addError('remote_get_failed_status', sprintf('Could not get remote file. HTTP Status Code: %s', $status_code));
       }
     }
