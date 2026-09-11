@@ -1,10 +1,10 @@
 <?php
 /*
 Plugin Name: ACF JSON CSV Integrator
-Plugin URI: https://github.com/aurora-ship-sato/acf-json-csv-integrator
+Plugin URI: https://github.com/ship-git-admin/acf-json-csv-integrator
 Description: An integrated tool to export and import ACF (Advanced Custom Fields) flexible content and repeaters seamlessly as JSON-formatted strings via CSV.
 Author: Gemini
-Version: 1.0.37
+Version: 1.0.38
 License: GPLv2 or later
 Text Domain: acf-json-csv-integrator
 Update URI: false
@@ -19,17 +19,15 @@ define('AJCI_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AJCI_PLUGIN_URL', plugin_dir_url(__FILE__));
 
 // ==========================================
-// 1. GitHub プライベートリポジトリとのアップデート連携
+// 1. GitHub リポジトリとのアップデート連携
 // ==========================================
 if (file_exists(AJCI_PLUGIN_DIR . 'lib/plugin-update-checker/plugin-update-checker.php')) {
   require_once AJCI_PLUGIN_DIR . 'lib/plugin-update-checker/plugin-update-checker.php';
   $myUpdateChecker = YahnisElsts\PluginUpdateChecker\v5\PucFactory::buildUpdateChecker(
-    'https://github.com/aurora-ship-sato/acf-json-csv-integrator',
+    'https://github.com/ship-git-admin/acf-json-csv-integrator',
     __FILE__,
     'acf-json-csv-integrator'
   );
-  // flex-bannerと同じトークンで認証
-  $myUpdateChecker->setAuthentication('REDACTED_GITHUB_TOKEN');
   $myUpdateChecker->setBranch('main');
 
   // クエリパラメータ ?force_update_check=1 が指定された場合、キャッシュを強制クリアしてGitHubに再問い合わせする
@@ -63,10 +61,10 @@ if (file_exists(AJCI_PLUGIN_DIR . 'lib/plugin-update-checker/plugin-update-check
         }
 
         // WP通信の直接テスト
-        $url = 'https://api.github.com/repos/aurora-ship-sato/acf-json-csv-integrator/tags';
+        $url = 'https://api.github.com/repos/ship-git-admin/acf-json-csv-integrator/tags';
         $options = array(
           'headers' => array(
-            'Authorization' => 'Basic ' . base64_encode('aurora-ship-sato:REDACTED_GITHUB_TOKEN')
+            'User-Agent' => 'ACF JSON CSV Integrator'
           ),
           'timeout' => 10
         );
