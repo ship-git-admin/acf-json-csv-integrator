@@ -22,6 +22,8 @@ if ( !class_exists( 'WP_Importer' ) ) {
 // Load Helpers
 require dirname( __FILE__ ) . '/class-ajci_csv_helper.php';
 require dirname( __FILE__ ) . '/class-ajci_import_post_helper.php';
+require_once dirname( __FILE__ ) . '/class-ajci-options-schema.php';
+require_once dirname( __FILE__ ) . '/class-ajci-import-security.php';
 
 /**
  * CSV Importer
@@ -37,6 +39,7 @@ class AJCI_CSV_Importer extends WP_Importer {
 	*/
 	public $column_indexes = array();
 	public $column_keys = array();
+	public $options_page_slug = '';
 
  	// User interface wrapper start
 	function header() {
@@ -101,6 +104,18 @@ class AJCI_CSV_Importer extends WP_Importer {
 							<p class="description">画像IDから画像のダウンロードを試みる際の移行元サーバーのアドレス。本プラグイン（v1.0.27以降）でエクスポートしたCSVには移行元URLが自動で埋め込まれているため、通常は未入力のままで構いません（入力した場合はそちらを優先します）。</p>
 						</td>
 					</tr>
+					<tr>
+						<th scope="row"><label for="ajci_options_page_slug">オプションCSVの対象ページ</label></th>
+						<td>
+							<select id="ajci_options_page_slug" name="ajci_options_page_slug">
+								<option value="">オプションCSV以外／未選択</option>
+								<?php foreach (AJCI_Options_Schema::get_registered_pages() as $page) : ?>
+									<option value="<?php echo esc_attr($page['menu_slug']); ?>"><?php echo esc_html($page['page_title'] ?? $page['menu_slug']); ?></option>
+								<?php endforeach; ?>
+							</select>
+							<p class="description">オプションCSVの場合は、保存先を必ず選択してください。CSV内のoptions_page_idは選択値との照合にのみ使用します。</p>
+						</td>
+					</tr>
 				</tbody>
 			</table>
 			<?php submit_button( __( 'Upload file and import' ) ); ?>
@@ -110,6 +125,12 @@ class AJCI_CSV_Importer extends WP_Importer {
 
 	// Step 2
 	function import() {
+		$upload_error = AJCI_Import_Security::validate_upload_input();
+		if (is_wp_error($upload_error)) {
+			echo '<p><strong>' . esc_html($upload_error->get_error_message()) . '</strong></p>';
+			return false;
+		}
+
 		$file = wp_import_handle_upload();
 
 		if ( isset( $file['error'] ) ) {
@@ -126,27 +147,51 @@ class AJCI_CSV_Importer extends WP_Importer {
 		$this->id = (int) $file['id'];
 		$this->file = get_attached_file($this->id);
 
+		$selected_options_page = '';
+		if (isset($_POST['ajci_options_page_slug']) && is_string($_POST['ajci_options_page_slug'])) {
+			$selected_options_page = sanitize_key(wp_unslash($_POST['ajci_options_page_slug']));
+		}
+		$this->options_page_slug = $selected_options_page;
+
+		// 業務データの更新・画像取得より先にCSV全体を検証する。
+		$preflight = AJCI_Options_Schema::preflight_file($this->file, $selected_options_page);
+		if (is_wp_error($preflight)) {
+			wp_import_cleanup($this->id);
+			echo '<p><strong>CSVの事前検証に失敗しました。</strong><br>' . esc_html($preflight->get_error_message()) . '</p>';
+			return false;
+		}
+
+		$job = AJCI_Import_Security::create_job($this->id, $this->file, $preflight);
+		if (is_wp_error($job)) {
+			wp_import_cleanup($this->id);
+			echo '<p><strong>インポートジョブを作成できませんでした。</strong><br>' . esc_html($job->get_error_message()) . '</p>';
+			return false;
+		}
+
 		// フォームから渡されたBasic認証情報と移行元URLを一時保存
-		$basic_auth_user = isset($_POST['basic_auth_user']) ? sanitize_text_field($_POST['basic_auth_user']) : '';
-		$basic_auth_pass = isset($_POST['basic_auth_pass']) ? sanitize_text_field($_POST['basic_auth_pass']) : '';
-		$import_origin_url = isset($_POST['import_origin_url']) ? esc_url_raw($_POST['import_origin_url']) : '';
+		$basic_auth_user = (isset($_POST['basic_auth_user']) && is_string($_POST['basic_auth_user']))
+			? sanitize_text_field(wp_unslash($_POST['basic_auth_user'])) : '';
+		$basic_auth_pass = (isset($_POST['basic_auth_pass']) && is_string($_POST['basic_auth_pass']))
+			? sanitize_text_field(wp_unslash($_POST['basic_auth_pass'])) : '';
+		$import_origin_url = (isset($_POST['import_origin_url']) && is_string($_POST['import_origin_url']))
+			? esc_url_raw(wp_unslash($_POST['import_origin_url'])) : '';
 
 		// AJAXバッチ処理用のUIとJSを出力する
-		$this->render_batch_ui($this->id, $basic_auth_user, $basic_auth_pass, $import_origin_url);
+		$this->render_batch_ui($job, $basic_auth_user, $basic_auth_pass, $import_origin_url);
 	}
 
-	function render_batch_ui($attachment_id, $basic_auth_user, $basic_auth_pass, $import_origin_url = '') {
-		// Count total lines in CSV
-		$h = new AJCI_CSV_Helper;
-		$handle = $h->fopen($this->file, 'r');
-		$total_rows = 0;
-		if ($handle !== false) {
-			while (($data = $h->fgetcsv($handle)) !== FALSE) {
-				$total_rows++;
-			}
-			$h->fclose($handle);
-		}
-		$total_data_rows = max(0, $total_rows - 1); // Exclude header
+	function render_batch_ui($job, $basic_auth_user, $basic_auth_pass, $import_origin_url = '') {
+		$total_data_rows = (int) $job['total_rows'];
+		$client_config = array(
+			'ajaxUrl' => admin_url('admin-ajax.php'),
+			'jobId' => $job['job_id'],
+			'chunkNonce' => wp_create_nonce('ajci_csv_import:chunk:' . $job['job_id']),
+			'cleanupNonce' => wp_create_nonce('ajci_csv_import:cleanup:' . $job['job_id']),
+			'totalRows' => $total_data_rows,
+			'basicAuthUser' => $basic_auth_user,
+			'basicAuthPass' => $basic_auth_pass,
+			'importOriginUrl' => $import_origin_url,
+		);
 		
 		echo '<div id="rs-csv-batch-import-wrap" style="max-width:800px; margin-top:20px;">';
 		echo '<h2>インポートを実行中...</h2>';
@@ -160,38 +205,59 @@ class AJCI_CSV_Importer extends WP_Importer {
 		?>
 		<script type="text/javascript">
 		jQuery(document).ready(function($){
-			var attachment_id = <?php echo (int) $attachment_id; ?>;
-			var total_rows = <?php echo (int) $total_data_rows; ?>;
-			var basic_auth_user = <?php echo json_encode($basic_auth_user); ?>;
-			var basic_auth_pass = <?php echo json_encode($basic_auth_pass); ?>;
-			var import_origin_url = <?php echo json_encode($import_origin_url); ?>;
+			var ajciImport = <?php echo wp_json_encode($client_config, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+			var total_rows = ajciImport.totalRows;
 			var processed = 0;
 			var offset = 1; // Start after header
-			var limit = 5; // Rows per batch
+			var stopped = false;
+
+			function stopWithError(message) {
+				stopped = true;
+				$('#rs-csv-complete-msg').show().css('color', '#b32d2e').text(message || 'インポートを停止しました。');
+				alert(message || 'インポートを停止しました。');
+			}
+
+			function cleanup() {
+				$.ajax({
+					url: ajciImport.ajaxUrl,
+					type: 'POST',
+					dataType: 'json',
+					data: {
+						action: 'ajci_csv_import_cleanup',
+						job_id: ajciImport.jobId,
+						_ajax_nonce: ajciImport.cleanupNonce
+					}
+				}).done(function(response) {
+					if (response && response.success) {
+						$('#rs-csv-complete-msg').show();
+					} else {
+						stopWithError('cleanupに失敗したため、完了扱いにできません。');
+					}
+				}).fail(function() {
+					stopWithError('cleanup通信に失敗したため、完了扱いにできません。');
+				});
+			}
 
 			function run_batch() {
+				if (stopped) {
+					return;
+				}
 				if (offset > total_rows || total_rows === 0) {
-					// Done
-					$.post(ajaxurl, {
-						action: 'ajci_csv_import_cleanup',
-						attachment_id: attachment_id
-					}, function(){
-						$('#rs-csv-complete-msg').show();
-					});
+					cleanup();
 					return;
 				}
 
 				$.ajax({
-					url: ajaxurl,
+					url: ajciImport.ajaxUrl,
 					type: 'POST',
 					data: {
 						action: 'ajci_csv_import_chunk',
-						attachment_id: attachment_id,
+						job_id: ajciImport.jobId,
+						_ajax_nonce: ajciImport.chunkNonce,
 						offset: offset,
-						limit: limit,
-						basic_auth_user: basic_auth_user,
-						basic_auth_pass: basic_auth_pass,
-						import_origin_url: import_origin_url
+						basic_auth_user: ajciImport.basicAuthUser,
+						basic_auth_pass: ajciImport.basicAuthPass,
+						import_origin_url: ajciImport.importOriginUrl
 					},
 					dataType: 'json',
 					success: function(response) {
@@ -202,6 +268,10 @@ class AJCI_CSV_Importer extends WP_Importer {
 								logDiv.scrollTop(logDiv[0].scrollHeight);
 							}
 							processed += response.data.processed;
+							if (response.data.next_offset <= offset || response.data.next_offset > total_rows + 1) {
+								stopWithError('サーバーから不正な進捗が返されたため、インポートを停止しました。');
+								return;
+							}
 							offset = response.data.next_offset;
 							
 							var percent = total_rows > 0 ? Math.min(100, Math.round((processed / total_rows) * 100)) : 100;
@@ -210,20 +280,16 @@ class AJCI_CSV_Importer extends WP_Importer {
 
 							run_batch();
 						} else {
-							alert('Error: ' + (response.data || 'Unknown error'));
+							stopWithError('インポートに失敗しました。');
 						}
 					},
 					error: function(xhr, status, error) {
-						alert('Ajax Error: ' + error);
+						stopWithError('インポート通信に失敗しました。');
 					}
 				});
 			}
 
-			if (total_rows > 0) {
-				run_batch();
-			} else {
-				$('#rs-csv-complete-msg').show().text('CSVファイルにデータがありません。');
-			}
+			run_batch();
 		});
 		</script>
 		<?php
@@ -337,6 +403,12 @@ class AJCI_CSV_Importer extends WP_Importer {
 	// process parse csv ind insert posts
 	function process_posts() {
 		$h = new AJCI_CSV_Helper;
+		$preflight = AJCI_Options_Schema::preflight_file($this->file, $this->options_page_slug);
+		if (is_wp_error($preflight)) {
+			echo '<p><strong>CSVの事前検証に失敗しました。</strong><br>' . esc_html($preflight->get_error_message()) . '</p>';
+			wp_import_cleanup($this->id);
+			return false;
+		}
 
 		$handle = $h->fopen($this->file, 'r');
 		if ( $handle == false ) {
@@ -349,6 +421,16 @@ class AJCI_CSV_Importer extends WP_Importer {
 		$post_statuses = get_post_stati();
 		$is_term_import = false;
 		$is_options_import = false;
+		$options_schema = null;
+		if ($preflight['mode'] === 'options') {
+			$options_schema = AJCI_Options_Schema::get_schema($preflight['options_page']['menu_slug']);
+			if (is_wp_error($options_schema)) {
+				echo '<p><strong>ACFの登録情報を確認できません。</strong><br>' . esc_html($options_schema->get_error_message()) . '</p>';
+				$h->fclose($handle);
+				wp_import_cleanup($this->id);
+				return false;
+			}
+		}
 		
 		echo '<ol>';
 		
@@ -360,7 +442,14 @@ class AJCI_CSV_Importer extends WP_Importer {
 				$is_term_import = in_array('taxonomy', $this->column_keys);
 				$is_options_import = in_array('options_page_id', $this->column_keys);
 			} else {
-				$this->process_single_row($data, $h, $is_term_import, $is_options_import, $post_statuses);
+				$this->process_single_row(
+					$data,
+					$h,
+					$is_term_import,
+					$is_options_import,
+					$post_statuses,
+					$options_schema
+				);
 			}
 		}
 		
@@ -373,7 +462,7 @@ class AJCI_CSV_Importer extends WP_Importer {
 		echo '<h3>'.__('All Done.', 'really-simple-csv-importer').'</h3>';
 	}
 
-		public function process_single_row($data, $h, $is_term_import, $is_options_import, $post_statuses) {
+		public function process_single_row($data, $h, $is_term_import, $is_options_import, $post_statuses, $options_schema = null) {
 				echo '<li>';
 
 				$post = array();
@@ -381,93 +470,66 @@ class AJCI_CSV_Importer extends WP_Importer {
 				$error = new WP_Error();
 
 				// CSVに埋め込まれた移行元サイトURL（_ajci_origin列）を抽出する。
-				// ユーザーがフォームで移行元URLを指定している場合はそちらを優先する。
-				$csv_origin = $h->get_data($this, $data, '_ajci_origin');
+				// オプション行の全体検証前に、検証対象の配列を変更しない。
+				$origin_data = $data;
+				$csv_origin = $h->get_data($this, $origin_data, '_ajci_origin');
+				if (!$is_options_import) {
+					$h->get_data($this, $data, '_ajci_origin');
+				}
 				if ($csv_origin && class_exists('AJCI_Import_Post_Helper') && empty(AJCI_Import_Post_Helper::$import_origin_url)) {
 					AJCI_Import_Post_Helper::$import_origin_url = esc_url_raw($csv_origin);
 				}
 				
 				if ($is_options_import) {
-					$options_page_id = $h->get_data($this, $data, 'options_page_id');
-					if (!$options_page_id) {
-						$error->add('options_page_id_empty', 'options_page_id列が空です。');
+					if (!is_array($options_schema)) {
+						$error->add('options_schema_invalid', 'オプションページの許可リストを確認できません。');
+					} else {
+						$row_error = AJCI_Options_Schema::validate_options_row($data, array_values($this->column_keys), $options_schema);
+						if (is_wp_error($row_error)) {
+							$error = $row_error;
+						}
 					}
 
-					if (!$error->get_error_codes()) {
-						// 画像再紐付け用のヘルパーインスタンスを作成
+					if (!$error->get_error_codes() && is_array($options_schema)) {
+						$options_page_id = $options_schema['post_id'];
 						$helper = new AJCI_Import_Post_Helper();
 
-						// 各カラムの値をオプションに保存
-						foreach ($data as $key => $value) {
-							if ($value !== false && isset($this->column_keys[$key])) {
-								$col_key = $this->column_keys[$key];
-								if ($col_key === 'options_page_id') {
-									continue;
-								}
-
-								// JSON 文字列の場合はデコード（ACFの配列データ対応）
-								$decoded_value = json_decode($value, true);
-								$is_json_array = false;
-								if ($decoded_value !== null || $value === '[]' || $value === '{}') {
-									$final_value = $decoded_value;
-									$is_json_array = is_array($final_value);
-								} else {
-									$final_value = $value;
-								}
-
-								// 画像ダウンロード・ID再紐付け処理
-								if (function_exists('get_field_object')) {
-									if (strpos($col_key, 'field_') === 0) {
-										// 単一画像・ファイルフィールドのキーの場合
-										$fobj = get_field_object($col_key);
-										if (is_array($fobj) && isset($fobj['key']) && $fobj['key'] == $col_key) {
-											if (isset($fobj['type']) && ($fobj['type'] === 'image' || $fobj['type'] === 'file')) {
-												if (is_string($final_value) && filter_var($final_value, FILTER_VALIDATE_URL)) {
-													$attachment_id = $helper->addMediaFile($final_value);
-													if ($attachment_id) {
-														$final_value = $attachment_id;
-													}
-												} elseif (is_numeric($final_value) || (is_string($final_value) && ctype_digit($final_value))) {
-													$new_id = $helper->resolveImageId($final_value);
-													if ($new_id) {
-														$final_value = $new_id;
-													}
-												}
-											}
-										}
-									} elseif ($is_json_array) {
-										// JSON配列の場合は、配列内画像URL/IDを再帰置換
-										$final_value = $helper->processAcfArrayImages($final_value);
-									}
-								}
-
-								// ACFの update_field が使えるなら使い、そうでなければ update_option を使う
-								if (function_exists('update_field')) {
-									// オプションページIDをコンテキストとしてフィールドキーを解決
-									$field_key = $helper->getFieldKey($col_key, array('options_page' => $options_page_id));
-
-									if (strpos($field_key, 'field_') === 0) {
-										// 正しいフィールドキーで update_field を実行（柔軟コンテンツも正しく保存）
-										// ※ update_field は値が不変の場合も false を返すため、戻り値は失敗判定に使わない
-										update_field($field_key, $final_value, $options_page_id);
-									} elseif ($is_json_array) {
-										if ($helper->hasParentColumn($col_key, array_values($this->column_keys))) {
-											// 親グループ列が存在する場合はそちら経由で取り込まれるため黙ってスキップ
-										} else {
-											// キー未解決の配列値を update_option で生のまま書くとACFのデータ構造を破壊し
-											// 「Cannot access offset of type array」等の致命的エラーを引き起こすためスキップする
-											echo esc_html(sprintf('⚠️ 警告: フィールド "%s" のACFフィールドキーを解決できなかったため、データ破損を避けてスキップしました。インポート先でACFフィールドグループが同期・有効化されているかご確認ください。<br>', $col_key));
-										}
-									} else {
-										// スカラー値はACF構造を壊さないため update_field でそのまま保存する
-										update_field($field_key, $final_value, $options_page_id);
-									}
-								} else {
-									update_option($options_page_id . '_' . $col_key, $final_value);
-								}
+						// 各カラムは事前に許可リストで解決済みの実フィールドへだけ保存する。
+						foreach ($this->column_keys as $key => $col_key) {
+							if (!array_key_exists($key, $data) || $data[$key] === false || in_array($col_key, AJCI_Options_Schema::RESERVED_COLUMNS, true)) {
+								continue;
 							}
+
+							$field = AJCI_Options_Schema::resolve_field($col_key, $options_schema);
+							if (is_wp_error($field)) {
+								$error = $field;
+								break;
+							}
+
+							$is_json = false;
+							$final_value = AJCI_Options_Schema::decode_value($data[$key], $is_json);
+							if (in_array($field['type'], array('image', 'file'), true)) {
+								if (is_string($final_value) && filter_var($final_value, FILTER_VALIDATE_URL)) {
+									$attachment_id = $helper->addMediaFile($final_value);
+									if ($attachment_id) {
+										$final_value = $attachment_id;
+									}
+								} elseif (is_numeric($final_value) || (is_string($final_value) && ctype_digit($final_value))) {
+									$new_id = $helper->resolveImageId($final_value);
+									if ($new_id) {
+										$final_value = $new_id;
+									}
+								}
+							} elseif ($is_json && is_array($final_value)) {
+								$final_value = $helper->processAcfArrayImages($final_value);
+							}
+
+							// 戻り値falseは変更なしの場合もあるため、失敗判定には使わない。
+							update_field($field['key'], $final_value, $options_page_id);
 						}
-						echo esc_html(sprintf('オプションページ "%s" の設定を更新しました。', $options_page_id));
+						if (!$error->get_error_codes()) {
+							echo esc_html(sprintf('オプションページ "%s" の設定を更新しました。', $options_page_id));
+						}
 					}
 				} else if ($is_term_import) {
 					$term_data = array();
@@ -843,118 +905,181 @@ add_filter('site_transient_update_plugins', function($transient) {
 // AJAX バッチ処理のハンドラー
 add_action('wp_ajax_ajci_csv_import_chunk', 'ajci_csv_import_chunk_handler');
 function ajci_csv_import_chunk_handler() {
-	// Debug handler
-	set_error_handler(function($errno, $errstr, $errfile, $errline) {
-		if (!(error_reporting() & $errno)) return;
-		throw new ErrorException($errstr, 0, $errno, $errfile, $errline);
-	});
+	$job_id = AJCI_Import_Security::require_ajax_request('chunk');
+	$offset = (isset($_POST['offset']) && is_scalar($_POST['offset']) && ctype_digit((string) wp_unslash($_POST['offset'])))
+		? (int) wp_unslash($_POST['offset'])
+		: 0;
+	if ($offset < 1) {
+		wp_send_json_error(array('code' => 'invalid_offset'), 400);
+	}
 
+	$job = null;
+	$lock_token = null;
+	$handle = false;
+	$buffer_started = false;
+	$error_handler_set = false;
 	try {
-		// 必要な管理画面用ファイルを読み込む
+		// The request envelope has already been checked before this handler is installed.
+		set_error_handler(function ($errno, $errstr, $errfile, $errline) {
+			if (!(error_reporting() & $errno)) {
+				return false;
+			}
+			throw new ErrorException($errstr, 0, $errno, $errfile, $errline);
+		});
+		$error_handler_set = true;
+
+		$job = AJCI_Import_Security::authorize_job($job_id, 'chunk');
+		if (is_wp_error($job)) {
+			wp_send_json_error(array('code' => $job->get_error_code()), 403);
+		}
+		$chunk = AJCI_Import_Security::begin_chunk($job, $offset);
+		if (is_wp_error($chunk)) {
+			wp_send_json_error(array('code' => $chunk->get_error_code()), 409);
+		}
+
+		$job = $chunk['job'];
+		$lock_token = $chunk['token'];
+
+		// 必要な管理画面用ファイルは、リクエスト検証とジョブ照合の後に読み込む。
 		require_once(ABSPATH . 'wp-admin/includes/taxonomy.php');
 		require_once(ABSPATH . 'wp-admin/includes/image.php');
 		require_once(ABSPATH . 'wp-admin/includes/file.php');
 		require_once(ABSPATH . 'wp-admin/includes/media.php');
-
-		if (!current_user_can('manage_options')) {
-			wp_send_json_error('Permission denied');
+		$file_error = AJCI_Import_Security::verify_job_file($job);
+		if (is_wp_error($file_error)) {
+			throw new RuntimeException('インポート用ファイルが変更されています。');
 		}
 
-	$attachment_id = isset($_POST['attachment_id']) ? (int) $_POST['attachment_id'] : 0;
-	$offset = isset($_POST['offset']) ? (int) $_POST['offset'] : 1;
-	$limit = isset($_POST['limit']) ? (int) $_POST['limit'] : 5;
-	$basic_auth_user = isset($_POST['basic_auth_user']) ? sanitize_text_field($_POST['basic_auth_user']) : '';
-	$basic_auth_pass = isset($_POST['basic_auth_pass']) ? sanitize_text_field($_POST['basic_auth_pass']) : '';
-	$import_origin_url = isset($_POST['import_origin_url']) ? esc_url_raw($_POST['import_origin_url']) : '';
+		$basic_auth_user = (isset($_POST['basic_auth_user']) && is_string($_POST['basic_auth_user']))
+			? sanitize_text_field(wp_unslash($_POST['basic_auth_user'])) : '';
+		$basic_auth_pass = (isset($_POST['basic_auth_pass']) && is_string($_POST['basic_auth_pass']))
+			? sanitize_text_field(wp_unslash($_POST['basic_auth_pass'])) : '';
+		$import_origin_url = (isset($_POST['import_origin_url']) && is_string($_POST['import_origin_url']))
+			? esc_url_raw(wp_unslash($_POST['import_origin_url'])) : '';
 
-	if (!$attachment_id) wp_send_json_error('No attachment ID');
-
-	$file = get_attached_file($attachment_id);
-	if (!$file || !file_exists($file)) {
-		wp_send_json_error('File not found');
-	}
-
-	if (class_exists('AJCI_Import_Post_Helper')) {
 		AJCI_Import_Post_Helper::$basic_auth_user = $basic_auth_user;
 		AJCI_Import_Post_Helper::$basic_auth_pass = $basic_auth_pass;
 		AJCI_Import_Post_Helper::$import_origin_url = $import_origin_url;
-		
-		// デバッグ: processAcfArrayImages の定義チェックとファイルパス特定
-		if (!method_exists('AJCI_Import_Post_Helper', 'processAcfArrayImages')) {
-			try {
-				$reflector = new ReflectionClass('AJCI_Import_Post_Helper');
-				$filePath = $reflector->getFileName();
-				wp_send_json_error('Debug Error: AJCI_Import_Post_Helper::processAcfArrayImages が未定義です。ロードされたファイル: ' . $filePath);
-			} catch (Exception $e) {
-				wp_send_json_error('Debug Error: AJCI_Import_Post_Helper::processAcfArrayImages が未定義です。リフレクション失敗: ' . $e->getMessage());
+
+		$importer = new AJCI_CSV_Importer();
+		$importer->id = (int) $job['attachment_id'];
+		$importer->file = $job['file_path'];
+
+		$h = new AJCI_CSV_Helper;
+		$handle = $h->fopen($job['file_path'], 'r');
+		if ($handle === false) {
+			throw new RuntimeException('CSVファイルを開けません。');
+		}
+
+		$header = $h->fgetcsv($handle);
+		if (!is_array($header)) {
+			throw new RuntimeException('CSVヘッダーを読み込めません。');
+		}
+		$header_for_compare = $header;
+		$bom = pack('CCC', 0xef, 0xbb, 0xbf);
+		if (isset($header_for_compare[0]) && is_string($header_for_compare[0]) && 0 === strncmp($header_for_compare[0], $bom, 3)) {
+			$header_for_compare[0] = substr($header_for_compare[0], 3);
+		}
+		$header_for_compare = array_map(function ($value) {
+			return is_string($value) ? trim($value) : $value;
+		}, $header_for_compare);
+		if ($header_for_compare !== $job['headers']) {
+			throw new RuntimeException('CSVヘッダーが検証済みの内容と一致しません。');
+		}
+		$h->parse_columns($importer, $header);
+		$is_term_import = $job['mode'] === 'term';
+		$is_options_import = $job['mode'] === 'options';
+		$options_schema = null;
+		if ($is_options_import) {
+			$options_schema = AJCI_Options_Schema::get_schema($job['options_page']['menu_slug']);
+			if (is_wp_error($options_schema) || $options_schema['fingerprint'] !== $job['schema_fingerprint']) {
+				throw new RuntimeException('ACFの登録情報が変更されたため、再検証が必要です。');
 			}
 		}
-	} else {
-		wp_send_json_error('Debug Error: AJCI_Import_Post_Helper クラスがロードされていません。');
-	}
 
-	$importer = new AJCI_CSV_Importer();
-	$importer->id = $attachment_id;
-	$importer->file = $file;
+		$current_row = 1;
+		while ($current_row < $offset && ($data = $h->fgetcsv($handle)) !== false) {
+			$current_row++;
+		}
+		if ($current_row !== $offset) {
+			throw new RuntimeException('CSVの進捗位置が不正です。');
+		}
 
-	$h = new AJCI_CSV_Helper;
-	$handle = $h->fopen($file, 'r');
-	if ($handle == false) {
-		wp_send_json_error('Failed to open file');
-	}
+		$processed = 0;
+		$post_statuses = get_post_stati();
+		$limit = 5;
+		ob_start();
+		$buffer_started = true;
+		while ($processed < $limit && ($data = $h->fgetcsv($handle)) !== false) {
+			if (!is_array($data) || count($data) !== count($job['headers'])) {
+				throw new RuntimeException('CSVの行構造が検証済みの内容と一致しません。');
+			}
+			$importer->process_single_row($data, $h, $is_term_import, $is_options_import, $post_statuses, $options_schema);
+			$processed++;
+			$current_row++;
+		}
+		$log = ob_get_clean();
+		$buffer_started = false;
 
-	// Read header
-	$header = $h->fgetcsv($handle);
-	$h->parse_columns($importer, $header);
-	$is_term_import = in_array('taxonomy', $importer->column_keys);
-	$is_options_import = in_array('options_page_id', $importer->column_keys);
+		if ($handle !== false) {
+			$h->fclose($handle);
+			$handle = false;
+		}
 
-	// Seek to offset
-	$current_row = 1;
-	while ($current_row < $offset && ($data = $h->fgetcsv($handle)) !== FALSE) {
-		$current_row++;
-	}
+		$updated_job = AJCI_Import_Security::complete_chunk($job, $lock_token, $current_row, $processed);
+		if (is_wp_error($updated_job)) {
+			wp_send_json_error(array('code' => $updated_job->get_error_code()), 500);
+		}
 
-	$processed = 0;
-	$post_statuses = get_post_stati();
-	
-	ob_start();
-	while ($processed < $limit && ($data = $h->fgetcsv($handle)) !== FALSE) {
-		$importer->process_single_row($data, $h, $is_term_import, $is_options_import, $post_statuses);
-		$processed++;
-		$current_row++;
-	}
-	$log = ob_get_clean();
-
-	$h->fclose($handle);
-
-	wp_send_json_success(array(
-		'processed' => $processed,
-		'next_offset' => $current_row,
-		'log' => $log
-	));
+		wp_send_json_success(array(
+			'processed' => $processed,
+			'next_offset' => $current_row,
+			'log' => $log,
+		));
 	} catch (Exception $e) {
-		if (ob_get_level() > 0) {
+		if ($buffer_started && ob_get_level() > 0) {
 			ob_end_clean();
 		}
-		wp_send_json_error('Error: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+		if ($handle !== false) {
+			fclose($handle);
+		}
+		if (is_array($job) && is_string($lock_token)) {
+			AJCI_Import_Security::fail_chunk($job, $lock_token);
+		}
+		wp_send_json_error(array('code' => 'import_failed'), 500);
 	} catch (Error $e) {
-		if (ob_get_level() > 0) {
+		if ($buffer_started && ob_get_level() > 0) {
 			ob_end_clean();
 		}
-		wp_send_json_error('Fatal Error: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+		if ($handle !== false) {
+			fclose($handle);
+		}
+		if (is_array($job) && is_string($lock_token)) {
+			AJCI_Import_Security::fail_chunk($job, $lock_token);
+		}
+		wp_send_json_error(array('code' => 'import_failed'), 500);
 	} finally {
-		restore_error_handler();
+		if ($error_handler_set) {
+			restore_error_handler();
+		}
 	}
 }
 
 add_action('wp_ajax_ajci_csv_import_cleanup', 'ajci_csv_import_cleanup_handler');
 function ajci_csv_import_cleanup_handler() {
-	if (!current_user_can('manage_options')) wp_send_json_error('Permission denied');
-	$attachment_id = isset($_POST['attachment_id']) ? (int) $_POST['attachment_id'] : 0;
-	if ($attachment_id) {
-		wp_import_cleanup($attachment_id);
+	$job_id = AJCI_Import_Security::require_ajax_request('cleanup');
+	$job = AJCI_Import_Security::authorize_job($job_id, 'cleanup');
+	if (is_wp_error($job)) {
+		wp_send_json_error(array('code' => $job->get_error_code()), 403);
 	}
-	wp_send_json_success();
+
+	if (!function_exists('wp_import_cleanup')) {
+		require_once ABSPATH . 'wp-admin/includes/import.php';
+	}
+	$result = AJCI_Import_Security::cleanup_job($job);
+	if (is_wp_error($result)) {
+		wp_send_json_error(array('code' => $result->get_error_code()), 500);
+	}
+	wp_send_json_success(array('cleaned' => true));
 }
 } // class_exists( 'WP_Importer' )

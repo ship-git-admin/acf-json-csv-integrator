@@ -2,6 +2,12 @@
 
 An integrated tool to export and import ACF (Advanced Custom Fields) flexible content and repeaters seamlessly as JSON-formatted strings via CSV.
 
+### 1.0.39
+- セキュリティ: CSVインポートと一時ファイル削除に、操作別nonce・実行者／サイト／添付ファイルを固定するジョブ検証・排他制御を追加。
+- セキュリティ: オプションインポートの保存先を、選択した登録済みACFオプションページと、そのページに適用される登録済みフィールドへ限定。
+- セキュリティ: 未登録フィールド、ACF未使用時の汎用オプション保存、クライアント指定の添付IDによる処理を廃止。
+- 互換性: オプションCSVに管理画面識別用の `_ajci_options_page` 列を追加。予約列はACFの保存対象外。
+
 ### 1.0.38 (2026-09-11)
 - 更新: GitHub自動更新先を `ship-git-admin/acf-json-csv-integrator` に変更し、公開リポジトリ対応。
 - 更新: `plugin-update-checker` を公式 v5.7 に更新。

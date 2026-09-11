@@ -3,14 +3,18 @@ $errors = array();
 
 if (
   isset($_POST['options_page_id']) &&
+  is_string($_POST['options_page_id']) &&
   is_user_logged_in() &&
   isset($_POST['_wpnonce']) &&
+  is_string($_POST['_wpnonce']) &&
   wp_verify_nonce($_POST['_wpnonce'], 'csv_exporter') &&
   current_user_can('manage_options') // オプションデータのため administrator 相当権限が必要
 ) {
   check_admin_referer('csv_exporter');
 
   $post_id     = sanitize_text_field($_POST['options_page_id']);
+  $selected_menu_slug = isset($_POST['options_page_slug']) && is_string($_POST['options_page_slug'])
+    ? sanitize_key(wp_unslash($_POST['options_page_slug'])) : '';
   $string_code = sanitize_text_field($_POST['string_code'] ?? 'UTF-8');
 
   // ── セキュリティ：$post_id を登録済みオプションページのホワイトリストで検証 ──
@@ -18,7 +22,7 @@ if (
   $allowed_pages  = $this->get_acf_options_pages_list();
   $allowed_post_ids = array();
   foreach ($allowed_pages as $slug => $page) {
-    $allowed_post_ids[] = $page['post_id'] ?? $slug;
+    $allowed_post_ids[] = (string) ($page['post_id'] ?? ($page['menu_slug'] ?? $slug));
   }
 
   if (!in_array($post_id, $allowed_post_ids, true)) {
@@ -29,10 +33,15 @@ if (
   // POSTされたフィールド名をそのまま信用せず、実際に存在するフィールドとの積集合のみ使用する
   $menu_slug = '';
   foreach ($allowed_pages as $slug => $page) {
-    if (($page['post_id'] ?? $slug) === $post_id) {
-      $menu_slug = $slug;
+    $page_menu_slug = sanitize_key($page['menu_slug'] ?? $slug);
+    $page_post_id = $page['post_id'] ?? ($page['menu_slug'] ?? $slug);
+    if ($page_menu_slug === $selected_menu_slug && (string) $page_post_id === (string) $post_id) {
+      $menu_slug = $page_menu_slug;
       break;
     }
+  }
+  if ($menu_slug === '') {
+    wp_die('Invalid options page.', 403);
   }
   $allowed_fields = $this->get_options_field_list($post_id, $menu_slug);
   $allowed_field_keys = array_column($allowed_fields, 'meta_key');
@@ -54,6 +63,8 @@ if (
     $row = array();
     // どのオプションページのデータかを識別できるよう先頭に付与
     $row['options_page_id'] = $post_id;
+    // 保存先の値とは別に、選択した管理画面の識別子を照合用メタ列として出力
+    $row['_ajci_options_page'] = $menu_slug;
     // 移行元サイトURL（インポート時の画像ID解決に自動利用される）
     $row['_ajci_origin'] = home_url();
 
