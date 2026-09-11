@@ -2,6 +2,11 @@
 
 An integrated tool to export and import ACF (Advanced Custom Fields) flexible content and repeaters seamlessly as JSON-formatted strings via CSV.
 
+### 1.0.38 (2026-09-11)
+- 更新: GitHub自動更新先を `ship-git-admin/acf-json-csv-integrator` に変更し、公開リポジトリ対応。
+- 更新: `plugin-update-checker` を公式 v5.7 に更新。
+- セキュリティ: GitHubアクセストークンのハードコードを削除。
+
 ### 1.0.37 (2026-09-02)
 - 修正: タームの柔軟コンテンツ・リピーター内にあるACF画像／ファイルIDを、エクスポート時に移行可能なURLへ変換するよう改修。
 - 修正: CSVインポート時、画像取得前に移行先ドメインへ置換して404になる問題を修正。JSON内URLの正規化、リダイレクト、2xxレスポンスにも対応。
