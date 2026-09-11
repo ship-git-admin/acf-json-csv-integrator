@@ -34,7 +34,9 @@ class AJCI_CSV_Helper {
 		}
 
 		$keys = array_keys($array);
-		$values = array_values($array);
+		$values = array_map(function ($value) {
+			return is_string($value) ? trim($value) : $value;
+		}, array_values($array));
 
 		$obj->column_indexes = array_combine($values, $keys);
 		$obj->column_keys = array_combine($keys, $values);

@@ -4,7 +4,7 @@ Plugin Name: ACF JSON CSV Integrator
 Plugin URI: https://github.com/ship-git-admin/acf-json-csv-integrator
 Description: An integrated tool to export and import ACF (Advanced Custom Fields) flexible content and repeaters seamlessly as JSON-formatted strings via CSV.
 Author: Gemini
-Version: 1.0.38
+Version: 1.0.39
 License: GPLv2 or later
 Text Domain: acf-json-csv-integrator
 Update URI: false
@@ -17,6 +17,12 @@ if (!defined('ABSPATH')) {
 // 定数の定義
 define('AJCI_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AJCI_PLUGIN_URL', plugin_dir_url(__FILE__));
+
+// 期限切れの一時インポートジョブを通常リクエストのcronから片付ける。
+require_once AJCI_PLUGIN_DIR . 'importer/class-ajci-import-security.php';
+register_deactivation_hook(__FILE__, function () {
+  wp_clear_scheduled_hook('ajci_cleanup_expired_import_jobs');
+});
 
 // ==========================================
 // 1. GitHub リポジトリとのアップデート連携
@@ -100,6 +106,8 @@ if (file_exists(AJCI_PLUGIN_DIR . 'importer/ajci-csv-importer.php')) {
     @opcache_invalidate(AJCI_PLUGIN_DIR . 'importer/ajci-csv-importer.php', true);
     @opcache_invalidate(AJCI_PLUGIN_DIR . 'importer/class-ajci_csv_helper.php', true);
     @opcache_invalidate(AJCI_PLUGIN_DIR . 'importer/class-ajci_import_post_helper.php', true);
+    @opcache_invalidate(AJCI_PLUGIN_DIR . 'importer/class-ajci-options-schema.php', true);
+    @opcache_invalidate(AJCI_PLUGIN_DIR . 'importer/class-ajci-import-security.php', true);
   }
   require_once AJCI_PLUGIN_DIR . 'importer/ajci-csv-importer.php';
 }

@@ -346,15 +346,17 @@ if ($wce_options = get_option('wce_options')) {
 
       <div class="plugin_contents">
         <?php foreach ($acf_options_pages as $slug => $page) :
-          $op_post_id    = $page['post_id']    ?? $slug;
+          $op_menu_slug  = sanitize_key($page['menu_slug'] ?? $slug);
+          $op_post_id    = $page['post_id']    ?? $op_menu_slug;
           $op_page_title = $page['page_title'] ?? $slug;
-          $op_cf_list    = $this->get_options_field_list($op_post_id, $slug);
+          $op_cf_list    = $this->get_options_field_list($op_post_id, $op_menu_slug);
         ?>
           <div class="plugin_content">
             <form action="<?php echo admin_url('admin-ajax.php'); ?>" method="post"
                   id="form_options_<?php echo esc_attr(sanitize_key($op_post_id)) ?>" target="_blank">
               <input type="hidden" name="action" value="download_options">
               <input type="hidden" name="options_page_id" value="<?php echo esc_attr($op_post_id); ?>">
+              <input type="hidden" name="options_page_slug" value="<?php echo esc_attr($op_menu_slug); ?>">
               <?php wp_nonce_field('csv_exporter'); ?>
 
               <div class="tool-box">
