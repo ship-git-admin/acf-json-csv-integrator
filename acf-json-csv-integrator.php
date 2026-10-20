@@ -4,7 +4,7 @@ Plugin Name: ACF JSON CSV Integrator
 Plugin URI: https://github.com/ship-git-admin/acf-json-csv-integrator
 Description: An integrated tool to export and import ACF (Advanced Custom Fields) flexible content and repeaters seamlessly as JSON-formatted strings via CSV.
 Author: Gemini
-Version: 1.0.39
+Version: 1.0.40
 License: GPLv2 or later
 Text Domain: acf-json-csv-integrator
 Update URI: false

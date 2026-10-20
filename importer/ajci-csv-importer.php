@@ -211,6 +211,14 @@ class AJCI_CSV_Importer extends WP_Importer {
 			var offset = 1; // Start after header
 			var stopped = false;
 
+			function responseErrorMessage(response, fallback) {
+				var data = response && response.data ? response.data : null;
+				if (data && data.message) {
+					return data.message;
+				}
+				return fallback;
+			}
+
 			function stopWithError(message) {
 				stopped = true;
 				$('#rs-csv-complete-msg').show().css('color', '#b32d2e').text(message || 'インポートを停止しました。');
@@ -230,8 +238,14 @@ class AJCI_CSV_Importer extends WP_Importer {
 				}).done(function(response) {
 					if (response && response.success) {
 						$('#rs-csv-complete-msg').show();
+						if (response.data && response.data.warnings && response.data.warnings.length) {
+							var warningText = '<p style="color:#996800;"><strong>警告:</strong><br>' + response.data.warnings.map(function(warning) {
+								return $('<div>').text(warning).html();
+							}).join('<br>') + '</p>';
+							$('#rs-csv-log').append(warningText);
+						}
 					} else {
-						stopWithError('cleanupに失敗したため、完了扱いにできません。');
+						stopWithError(responseErrorMessage(response, 'cleanupに失敗したため、完了扱いにできません。'));
 					}
 				}).fail(function() {
 					stopWithError('cleanup通信に失敗したため、完了扱いにできません。');
@@ -267,6 +281,12 @@ class AJCI_CSV_Importer extends WP_Importer {
 								var logDiv = $('#rs-csv-log').parent();
 								logDiv.scrollTop(logDiv[0].scrollHeight);
 							}
+							if (response.data.warnings && response.data.warnings.length) {
+								var warningText = '<p style="color:#996800;"><strong>警告:</strong><br>' + response.data.warnings.map(function(warning) {
+									return $('<div>').text(warning).html();
+								}).join('<br>') + '</p>';
+								$('#rs-csv-log').append(warningText);
+							}
 							processed += response.data.processed;
 							if (response.data.next_offset <= offset || response.data.next_offset > total_rows + 1) {
 								stopWithError('サーバーから不正な進捗が返されたため、インポートを停止しました。');
@@ -280,11 +300,12 @@ class AJCI_CSV_Importer extends WP_Importer {
 
 							run_batch();
 						} else {
-							stopWithError('インポートに失敗しました。');
+							stopWithError(responseErrorMessage(response, 'インポートに失敗しました。'));
 						}
 					},
-					error: function(xhr, status, error) {
-						stopWithError('インポート通信に失敗しました。');
+					error: function(xhr) {
+						var response = xhr && xhr.responseJSON ? xhr.responseJSON : null;
+						stopWithError(responseErrorMessage(response, 'インポート通信に失敗しました。'));
 					}
 				});
 			}
@@ -918,11 +939,28 @@ function ajci_csv_import_chunk_handler() {
 	$handle = false;
 	$buffer_started = false;
 	$error_handler_set = false;
+	$runtime_warnings = array();
 	try {
 		// The request envelope has already been checked before this handler is installed.
-		set_error_handler(function ($errno, $errstr, $errfile, $errline) {
+		// ACF and older exporter data can emit recoverable warnings while processing
+		// one column. Keep the warning tied to the current column and let the batch
+		// continue instead of turning it into an opaque 500 response.
+		set_error_handler(function ($errno, $errstr, $errfile, $errline) use (&$runtime_warnings) {
 			if (!(error_reporting() & $errno)) {
 				return false;
+			}
+			$recoverable = E_WARNING | E_USER_WARNING | E_NOTICE | E_USER_NOTICE | E_DEPRECATED | E_USER_DEPRECATED;
+			if (($errno & $recoverable) !== 0) {
+				$field = '';
+				if (class_exists('AJCI_Import_Post_Helper') && !empty(AJCI_Import_Post_Helper::$current_meta_key)) {
+					$field = ' [列: ' . AJCI_Import_Post_Helper::$current_meta_key . ']';
+				}
+				$warning = sprintf('%s%s (%s:%d)', $errstr, $field, $errfile, $errline);
+				if (count($runtime_warnings) < 25) {
+					$runtime_warnings[] = $warning;
+				}
+				error_log('[AJCI import warning] ' . $warning);
+				return true;
 			}
 			throw new ErrorException($errstr, 0, $errno, $errfile, $errline);
 		});
@@ -1035,6 +1073,7 @@ function ajci_csv_import_chunk_handler() {
 			'processed' => $processed,
 			'next_offset' => $current_row,
 			'log' => $log,
+			'warnings' => $runtime_warnings,
 		));
 	} catch (Exception $e) {
 		if ($buffer_started && ob_get_level() > 0) {
@@ -1046,7 +1085,8 @@ function ajci_csv_import_chunk_handler() {
 		if (is_array($job) && is_string($lock_token)) {
 			AJCI_Import_Security::fail_chunk($job, $lock_token);
 		}
-		wp_send_json_error(array('code' => 'import_failed'), 500);
+		error_log('[AJCI import error] ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+		wp_send_json_error(array('code' => 'import_failed', 'message' => 'インポート中にエラーが発生しました: ' . $e->getMessage()), 500);
 	} catch (Error $e) {
 		if ($buffer_started && ob_get_level() > 0) {
 			ob_end_clean();
@@ -1057,7 +1097,8 @@ function ajci_csv_import_chunk_handler() {
 		if (is_array($job) && is_string($lock_token)) {
 			AJCI_Import_Security::fail_chunk($job, $lock_token);
 		}
-		wp_send_json_error(array('code' => 'import_failed'), 500);
+		error_log('[AJCI import error] ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+		wp_send_json_error(array('code' => 'import_failed', 'message' => 'インポート中にエラーが発生しました: ' . $e->getMessage()), 500);
 	} finally {
 		if ($error_handler_set) {
 			restore_error_handler();

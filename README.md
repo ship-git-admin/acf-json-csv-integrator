@@ -2,6 +2,11 @@
 
 An integrated tool to export and import ACF (Advanced Custom Fields) flexible content and repeaters seamlessly as JSON-formatted strings via CSV.
 
+### 1.0.40
+- 修正: 未保存のACFフィールドやサムネイルが選択された場合に、エクスポート側でPHP警告が発生する問題を修正。
+- 改善: ACF処理中の回復可能な警告でバッチ全体を500エラーにせず、対象列と警告内容を管理画面へ表示して処理を継続。
+- 改善: 回復不能なインポートエラーはサーバーログへ記録し、管理画面にも原因を返すように修正。
+
 ### 1.0.39
 - セキュリティ: CSVインポートと一時ファイル削除に、操作別nonce・実行者／サイト／添付ファイルを固定するジョブ検証・排他制御を追加。
 - セキュリティ: オプションインポートの保存先を、選択した登録済みACFオプションページと、そのページに適用される登録済みフィールドへ限定。
