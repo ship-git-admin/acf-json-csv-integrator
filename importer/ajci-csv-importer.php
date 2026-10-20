@@ -56,15 +56,17 @@ class AJCI_CSV_Importer extends WP_Importer {
 	function greet() {
 		$template_url = plugin_dir_url( __FILE__ ) . 'sample/works-ai-import-template.xlsx';
 		echo '<div class="notice notice-info inline" style="padding:12px 16px;">';
-		echo '<h3 style="margin:0 0 8px;">施工事例をExcelから作成</h3>';
+		echo '<h3 style="margin:0 0 8px;">AIで施工事例を作って下書きに取り込む</h3>';
 		echo '<p><a class="button button-secondary" href="' . esc_url( $template_url ) . '" download>施工事例インポート用Excelテンプレート</a></p>';
 		echo '<ol>';
-		echo '<li>Excelの「CSV入力」シートに、1記事につき1行で入力します。1行目の列名は変更しないでください。</li>';
-		echo '<li>「入力ガイド」と「JSON例」を確認し、JSON欄の例は実データに置き換えてください。</li>';
-		echo '<li>「CSV入力」シートを選び、CSV UTF-8（カンマ区切り）で保存します。</li>';
-		echo '<li>保存したCSVを下の欄からアップロードします。新規記事は post_id を空欄にし、公開前に確認する場合は post_status を draft にします。</li>';
+		echo '<li>上のExcelをダウンロードし、施工写真・打合せメモなどの記事資料を用意します。</li>';
+		echo '<li>AIチャットにExcelと資料を添付します。Excel下部の「AI依頼文」タブを開き、A5セルをコピー（Macは⌘C、WindowsはCtrl+C）してAIチャットに貼り、送信します。CSV列やJSONを自分で書く必要はありません。</li>';
+		echo '<li>AIから「記入済みExcel」「インポート用CSV」「不明・未確認点一覧」を受け取ります。CSVが返らない場合は、ダウンロードできるCSVファイルも作るようAIに依頼してください。</li>';
+		echo '<li>記入済みExcelでタイトル・写真・内容を確認します。新しい記事は公開されず、下書きとして作成されます。</li>';
+		echo '<li>画面下部でAIから受け取ったCSV（.csv）を選び、インポートボタンを押します。Excel（.xlsx）は選びません。CSVはUTF-8・カンマ区切りにします。</li>';
+		echo '<li>取り込み後、管理画面の「施工事例」一覧から新しい下書きを開き、内容を確認してから公開します。</li>';
 		echo '</ol>';
-		echo '<p style="margin-bottom:0;">Excelファイル自体はアップロードできません。空の行は読み飛ばされます。</p>';
+		echo '<p style="margin-bottom:0;">AIの回答が文章だけの場合は、完成ExcelとCSVをダウンロードできるファイルで作るよう追加依頼してください。空の行は読み飛ばされます。</p>';
 		echo '</div>';
 		echo '<p>'.__( 'Choose a CSV (.csv) file to upload, then click Upload file and import.', 'really-simple-csv-importer' ).'</p>';
 		echo '<p>'.__( 'Requirements:', 'really-simple-csv-importer' ).'</p>';
