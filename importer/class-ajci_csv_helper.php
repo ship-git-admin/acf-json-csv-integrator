@@ -48,7 +48,7 @@ class AJCI_CSV_Helper {
 
 		if (isset($obj->column_indexes[$key])) {
 			$index = $obj->column_indexes[$key];
-			if (isset($array[$index]) && !empty($array[$index])) {
+			if (isset($array[$index]) && $array[$index] !== null && $array[$index] !== false && trim((string) $array[$index]) !== '') {
 				$value = $array[$index];
 				unset($array[$index]);
 				return $value;

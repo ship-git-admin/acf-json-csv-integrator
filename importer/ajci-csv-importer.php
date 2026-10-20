@@ -54,8 +54,19 @@ class AJCI_CSV_Importer extends WP_Importer {
 	
 	// Step 1
 	function greet() {
+		$template_url = plugin_dir_url( __FILE__ ) . 'sample/works-ai-import-template.xlsx';
+		echo '<div class="notice notice-info inline" style="padding:12px 16px;">';
+		echo '<h3 style="margin:0 0 8px;">施工事例をExcelから作成</h3>';
+		echo '<p><a class="button button-secondary" href="' . esc_url( $template_url ) . '" download>施工事例インポート用Excelテンプレート</a></p>';
+		echo '<ol>';
+		echo '<li>Excelの「CSV入力」シートに、1記事につき1行で入力します。1行目の列名は変更しないでください。</li>';
+		echo '<li>「入力ガイド」と「JSON例」を確認し、JSON欄の例は実データに置き換えてください。</li>';
+		echo '<li>「CSV入力」シートを選び、CSV UTF-8（カンマ区切り）で保存します。</li>';
+		echo '<li>保存したCSVを下の欄からアップロードします。新規記事は post_id を空欄にし、公開前に確認する場合は post_status を draft にします。</li>';
+		echo '</ol>';
+		echo '<p style="margin-bottom:0;">Excelファイル自体はアップロードできません。空の行は読み飛ばされます。</p>';
+		echo '</div>';
 		echo '<p>'.__( 'Choose a CSV (.csv) file to upload, then click Upload file and import.', 'really-simple-csv-importer' ).'</p>';
-		echo '<p>'.__( 'Excel-style CSV file is unconventional and not recommended. LibreOffice has enough export options and recommended for most users.', 'really-simple-csv-importer' ).'</p>';
 		echo '<p>'.__( 'Requirements:', 'really-simple-csv-importer' ).'</p>';
 		echo '<ol>';
 		echo '<li>'.__( 'Select UTF-8 as charset.', 'really-simple-csv-importer' ).'</li>';
@@ -484,6 +495,19 @@ class AJCI_CSV_Importer extends WP_Importer {
 	}
 
 		public function process_single_row($data, $h, $is_term_import, $is_options_import, $post_statuses, $options_schema = null) {
+				if (!is_array($data)) {
+					return;
+				}
+				$has_nonblank_value = false;
+				foreach ($data as $cell_value) {
+					if ($cell_value !== null && $cell_value !== false && trim((string) $cell_value) !== '') {
+						$has_nonblank_value = true;
+						break;
+					}
+				}
+				if (!$has_nonblank_value) {
+					return;
+				}
 				echo '<li>';
 
 				$post = array();
