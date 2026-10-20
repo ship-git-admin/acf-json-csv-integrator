@@ -161,7 +161,10 @@ if (
       if (!empty($_POST['post_thumbnail'])) {
         $thumbnail_id = get_post_thumbnail_id($result['post_id']);
         $thumbnail_url_array = wp_get_attachment_image_src($thumbnail_id, true);
-        $thumbnail_url = apply_filters('wp_csv_exporter_thumbnail_url', $thumbnail_url_array[0], $result['post_id']);
+        $thumbnail_url = (is_array($thumbnail_url_array) && isset($thumbnail_url_array[0]))
+          ? $thumbnail_url_array[0]
+          : '';
+        $thumbnail_url = apply_filters('wp_csv_exporter_thumbnail_url', $thumbnail_url, $result['post_id']);
         $customs_array += array($_POST['post_thumbnail'] => $thumbnail_url);
       }
 
@@ -240,7 +243,12 @@ if (
       if (!empty($fields) && !empty($_POST['cf_fields'])) {
         foreach ($_POST['cf_fields'] as $key => $value) {
           //チェックしたフィールドだけを取得
-          $field = $fields[$value];
+          // ACFの親フィールドや未保存の空フィールドは、get_post_custom() に
+          // キーが存在しないことがある。未定義キーを直接参照すると、PHP 8系で
+          // CSV出力時に警告が発生し、インポート側の診断も不安定になる。
+          $field = isset($fields[$value]) && is_array($fields[$value])
+            ? $fields[$value]
+            : array();
           //アンダーバーから始まるのは削除
           if (!preg_match('/^_.*/', $value)) {
             // インデックス付きのACFサブフィールドキー（例: faq_answer_supplements_0_text_content）は完全に無視してスキップ

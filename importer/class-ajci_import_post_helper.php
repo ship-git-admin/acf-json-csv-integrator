@@ -34,6 +34,11 @@ class AJCI_Import_Post_Helper
   public static $import_origin_url;
 
   /**
+   * @var string 現在処理中のACF／メタ列名（警告の診断用）
+   */
+  public static $current_meta_key = '';
+
+  /**
    * @var array フィールド名→フィールドキーのマップキャッシュ（コンテキスト別）
    */
   private static $field_key_map_cache = array();
@@ -195,6 +200,7 @@ class AJCI_Import_Post_Helper
     }
 
     foreach ($data as $key => $value) {
+      self::$current_meta_key = (string) $key;
       $decoded_value = null;
       $is_json_array = false;
       if (is_string($value) && !empty($value)) {
@@ -254,6 +260,8 @@ class AJCI_Import_Post_Helper
         update_term_meta($term->term_id, $key, $value);
       }
     }
+
+    self::$current_meta_key = '';
   }
 
   /**
@@ -399,6 +407,7 @@ class AJCI_Import_Post_Helper
     $replace_domain = is_callable($replace_domain) ? $replace_domain : null;
     $scf_array = array();
     foreach ($data as $key => $value) {
+      self::$current_meta_key = (string) $key;
       $is_cfs = 0;
       $is_scf = 0;
       $is_acf = 0;
@@ -481,6 +490,7 @@ class AJCI_Import_Post_Helper
       }
     }
     $this->scfSave($scf_array);
+    self::$current_meta_key = '';
   }
 
   /**
